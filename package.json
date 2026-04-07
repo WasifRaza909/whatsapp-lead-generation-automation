@@ -1,0 +1,35 @@
+{
+  "name": "whatsmaps-ai",
+  "version": "1.0.0",
+  "description": "WhatsMaps AI: Google Maps Scraper & WhatsApp AI Sender",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "postinstall": "node scripts/postinstall.js",
+    "rebuild:native": "electron-rebuild -f -w better-sqlite3"
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "^5.2.8",
+    "better-sqlite3": "^12.8.0",
+    "puppeteer-core": "^24.40.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@electron/rebuild": "^3.6.0",
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/node": "^20.14.0",
+    "@types/puppeteer": "^7.0.4",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.0.0",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.5.2",
+    "vite": "^5.3.1"
+  }
+}
