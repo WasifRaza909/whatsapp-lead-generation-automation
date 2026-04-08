@@ -59,8 +59,11 @@ const api = {
   validateApiKey: (apiKey: string): Promise<void> =>
     ipcRenderer.invoke('ai:validateKey', apiKey),
 
-  processWithAI: (apiKey: string): Promise<{ processed: number }> =>
-    ipcRenderer.invoke('ai:processLeads', apiKey),
+  processWithAI: (payload: { apiKey: string; service?: string }): Promise<{ processed: number }> =>
+    ipcRenderer.invoke('ai:processLeads', payload),
+
+  generateOne: (payload: { apiKey: string; leadId: number; service?: string }): Promise<{ leadId: number; message: string }> =>
+    ipcRenderer.invoke('ai:generateOne', payload),
 
   stopAI: (): Promise<void> =>
     ipcRenderer.invoke('ai:stop'),

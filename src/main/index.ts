@@ -16,6 +16,17 @@ import { generatePersonalizedMessage, validateApiKey } from './gemini'
 
 let aiAbortFlag = false
 
+// During development, override Electron's `userData` path to a project-local folder
+// This avoids system-level cache permission issues when running in dev mode.
+if (is.dev) {
+  try {
+    const devUserData = join(process.cwd(), '.electron-user-data')
+    app.setPath('userData', devUserData)
+  } catch (err) {
+    // swallow — if this fails the app will fall back to default paths
+    console.warn('Failed to set dev userData path', err)
+  }
+}
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -91,9 +102,13 @@ app.whenReady().then(() => {
 
   // IPC: generate AI messages for all leads that have no ai_message yet.
   // Streams per-lead progress via win.webContents.send('ai:progress', AiProgress).
-  ipcMain.handle('ai:processLeads', async (_event: IpcMainInvokeEvent, apiKey: string) => {
+  ipcMain.handle('ai:processLeads', async (_event: IpcMainInvokeEvent, payload: { apiKey: string; service?: string }) => {
     const win = BrowserWindow.getAllWindows()[0]
     if (!win) throw new Error('No window available')
+
+    const { apiKey, service } = typeof payload === 'string'
+      ? { apiKey: payload, service: undefined }
+      : payload
 
     const leads = getLeadsWithoutAiMessage()
     if (leads.length === 0) return { processed: 0 }
@@ -119,7 +134,8 @@ app.whenReady().then(() => {
         const message = await generatePersonalizedMessage(apiKey, {
           name: lead.name,
           address: lead.address,
-          website: lead.website
+          website: lead.website,
+          service
         })
 
         if (aiAbortFlag) break
@@ -163,6 +179,26 @@ app.whenReady().then(() => {
   ipcMain.handle('ai:stop', async () => {
     aiAbortFlag = true
   })
+
+  // IPC: generate AI message for a single lead by id
+  ipcMain.handle(
+    'ai:generateOne',
+    async (_event: IpcMainInvokeEvent, payload: { apiKey: string; leadId: number; service?: string }) => {
+      const { apiKey, leadId, service } = payload
+      const leads = getLeads()
+      const lead = leads.find((l) => l.id === leadId)
+      if (!lead) throw new Error(`Lead ${leadId} not found`)
+
+      const message = await generatePersonalizedMessage(apiKey, {
+        name: lead.name,
+        address: lead.address,
+        website: lead.website,
+        service
+      })
+      updateLeadAiMessage(lead.id!, message)
+      return { leadId, message }
+    }
+  )
 
   createWindow()
 

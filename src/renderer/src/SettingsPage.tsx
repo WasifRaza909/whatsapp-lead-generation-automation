@@ -1,24 +1,28 @@
 import React, { useState, useEffect } from 'react'
 
-const LS_KEY = 'gemini_api_key'
+const LS_KEY         = 'gemini_api_key'
+const LS_SERVICE_KEY = 'my_service'
 
 type ValidateState = 'idle' | 'loading' | 'ok' | 'error'
 
 export default function SettingsPage(): React.ReactElement {
-  const [apiKey, setApiKey] = useState('')
-  const [saved, setSaved] = useState(false)
-  const [showKey, setShowKey] = useState(false)
+  const [apiKey, setApiKey]       = useState('')
+  const [myService, setMyService] = useState('')
+  const [saved, setSaved]         = useState(false)
+  const [showKey, setShowKey]     = useState(false)
   const [validateState, setValidateState] = useState<ValidateState>('idle')
-  const [validateMsg, setValidateMsg] = useState('')
+  const [validateMsg, setValidateMsg]     = useState('')
 
-  // Load saved key on mount
+  // Load saved values on mount
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY) ?? ''
     setApiKey(stored)
+    setMyService(localStorage.getItem(LS_SERVICE_KEY) ?? '')
   }, [])
 
   const handleSave = (): void => {
     localStorage.setItem(LS_KEY, apiKey.trim())
+    localStorage.setItem(LS_SERVICE_KEY, myService.trim())
     setSaved(true)
     setValidateState('idle')
     setTimeout(() => setSaved(false), 2500)
@@ -26,7 +30,9 @@ export default function SettingsPage(): React.ReactElement {
 
   const handleClear = (): void => {
     localStorage.removeItem(LS_KEY)
+    localStorage.removeItem(LS_SERVICE_KEY)
     setApiKey('')
+    setMyService('')
     setValidateState('idle')
     setValidateMsg('')
   }
@@ -89,6 +95,20 @@ export default function SettingsPage(): React.ReactElement {
           </button>
         </div>
 
+        {/* My Service input */}
+        <label className="settings-label" style={{ marginTop: '1.2rem' }}>Your Service</label>
+        <input
+          className="key-input"
+          type="text"
+          placeholder="e.g. SEO, web design, social media marketing…"
+          value={myService}
+          onChange={(e) => { setMyService(e.target.value); setSaved(false) }}
+          spellCheck={false}
+        />
+        <p className="settings-hint">
+          Used in AI prompts: "We can help them with <em>{myService || 'your service'}</em>."
+        </p>
+
         <div className="settings-actions">
           <button className="btn-primary" onClick={handleSave} disabled={!apiKey.trim()}>
             💾 Save Key
@@ -133,9 +153,9 @@ export default function SettingsPage(): React.ReactElement {
             waits ~4 s between leads to stay within limits.
           </li>
           <li>
-            <strong>Prompt:</strong> "Write a professional 2-line WhatsApp greeting for{' '}
-            <em>[Business Name]</em>. Mention we can help improve their digital presence.
-            Keep it under 30 words."
+            <strong>Prompt:</strong> "Write a friendly 2-line WhatsApp intro for{' '}
+            <em>[Business Name]</em>, located in <em>[City]</em>. Mention we can help them with{' '}
+            <em>[Your Service]</em>. Keep it under 35 words."
           </li>
           <li>
             <strong>Storage:</strong> API key is saved only in&nbsp;

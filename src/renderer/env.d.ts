@@ -40,7 +40,8 @@ declare global {
       onStatus: (cb: (msg: string) => void) => () => void
       // Gemini AI
       validateApiKey: (apiKey: string) => Promise<void>
-      processWithAI: (apiKey: string) => Promise<{ processed: number }>
+      processWithAI: (payload: { apiKey: string; service?: string }) => Promise<{ processed: number }>
+      generateOne: (payload: { apiKey: string; leadId: number; service?: string }) => Promise<{ leadId: number; message: string }>
       stopAI: () => Promise<void>
       onAiProgress: (cb: (progress: AiProgress) => void) => () => void
     }

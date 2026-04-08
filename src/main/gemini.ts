@@ -10,6 +10,7 @@ export interface LeadData {
   name: string
   address?: string
   website?: string
+  service?: string
 }
 
 interface GeminiResponse {
@@ -24,9 +25,17 @@ export async function generatePersonalizedMessage(
   apiKey: string,
   leadData: LeadData
 ): Promise<string> {
+  // Extract city from address (take the last meaningful part after a comma)
+  const city = leadData.address
+    ? (leadData.address.split(',').slice(-2, -1)[0]?.trim() || leadData.address.split(',')[0]?.trim())
+    : ''
+
+  const service = leadData.service?.trim() || 'digital marketing services'
+
   const prompt =
-    `Write a professional 2-line WhatsApp greeting for ${leadData.name}. ` +
-    `Mention we can help improve their digital presence. Keep it under 30 words.`
+    `Write a friendly 2-line WhatsApp intro message for ${leadData.name}` +
+    (city ? `, located in ${city}` : '') +
+    `. Mention that we can help them with ${service}. Keep it under 35 words, casual and professional.`
 
   try {
     const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
