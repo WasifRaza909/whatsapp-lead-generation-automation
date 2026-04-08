@@ -6,7 +6,8 @@ export interface Lead {
   phone: string
   address: string
   website: string
-  ai_message: string
+  email: string
+  custom_message: string
 }
 
 export interface ScrapeOptions {

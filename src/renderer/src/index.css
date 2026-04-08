@@ -673,6 +673,41 @@ th {
 .sort-indicator.asc::before  { border-bottom-color: var(--cyan); opacity: 1; }
 .sort-indicator.desc::after  { border-top-color: var(--cyan);    opacity: 1; }
 
+/* th-btn inherits uppercase/letter-spacing from th; keep text-transform */
+.th-label { text-transform: uppercase; letter-spacing: 0.12em; }
+
+/* ── AI error banner ─────────────────────────────────────────────────────── */
+.ai-error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.9rem;
+  padding: 0.7rem 1rem;
+  background: rgba(248,113,113,0.08);
+  border: 1px solid rgba(248,113,113,0.28);
+  border-radius: 10px;
+  animation: fadeSoft 0.4s var(--ease-out-expo);
+}
+.ai-error-icon { font-size: 0.9rem; }
+.ai-error-msg {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #fca5a5;
+  line-height: 1.45;
+}
+.ai-error-close {
+  background: transparent;
+  border: none;
+  color: #f87171;
+  font-size: 0.72rem;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+.ai-error-close:hover { background: rgba(248,113,113,0.12); }
+.ai-error-close::after { display: none; }
 
 td {
   padding: 0.72rem 1rem;
@@ -716,6 +751,13 @@ tr:hover td {
   font-size: 0.8rem;
   font-weight: 500;
 }
+.td-email {
+  max-width: 180px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.8rem;
+}
 .td-addr {
   max-width: 200px;
   white-space: nowrap;
@@ -734,6 +776,168 @@ a {
 a:hover {
   color: #67e8f9;
   text-decoration-color: #67e8f9;
+}
+
+/* ── View button ─────────────────────────────────────────────────────────── */
+.btn-view {
+  background: rgba(34,211,238,0.07);
+  color: var(--cyan);
+  border: 1px solid rgba(34,211,238,0.2);
+  padding: 0.28rem 0.52rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  border-radius: 7px;
+  will-change: transform;
+  transition: color 0.3s, background 0.3s, border-color 0.3s, box-shadow 0.3s,
+              transform 0.35s var(--spring);
+}
+.btn-view:hover {
+  background: rgba(34,211,238,0.16);
+  border-color: rgba(34,211,238,0.45);
+  box-shadow: 0 0 14px rgba(34,211,238,0.2);
+  transform: scale(1.15) !important;
+  animation: none !important;
+}
+.btn-view::after { display: none; }
+
+/* ── Lead Detail Modal ───────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3,9,18,0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: fadeSoft 0.22s var(--ease-out-expo) both;
+}
+
+.modal-card {
+  background: rgba(9,18,33,0.96);
+  border: 1px solid rgba(51,65,85,0.65);
+  border-radius: 22px;
+  width: 100%;
+  max-width: 520px;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(34,211,238,0.06);
+  animation: modalPop 0.35s var(--ease-out-expo) both;
+  overflow: hidden;
+  position: relative;
+}
+/* top accent line */
+.modal-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 10%, var(--cyan) 50%, transparent 90%);
+  opacity: 0.45;
+}
+@keyframes modalPop {
+  from { opacity: 0; transform: scale(0.92) translateY(20px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);     }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.4rem 1.6rem 1.1rem;
+  border-bottom: 1px solid rgba(30,41,59,0.6);
+}
+.modal-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+.modal-icon { font-size: 1.5rem; flex-shrink: 0; }
+.modal-title {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal-subtitle {
+  font-size: 0.67rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  display: block;
+  margin-top: 0.15rem;
+}
+.modal-close {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(100,116,139,0.2);
+  color: var(--text-dim);
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.8rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.25s, background 0.25s, border-color 0.25s, transform 0.3s var(--spring);
+}
+.modal-close:hover {
+  color: var(--text);
+  background: rgba(248,113,113,0.1);
+  border-color: rgba(248,113,113,0.3);
+  transform: scale(1.1) !important;
+}
+.modal-close::after { display: none; }
+
+.modal-body {
+  padding: 1.2rem 1.6rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.modal-field__label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.modal-field__value {
+  font-size: 0.9rem;
+  color: var(--text);
+  font-weight: 500;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.modal-field--ai {
+  margin-top: 0.3rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(30,41,59,0.55);
+}
+.modal-ai-msg {
+  font-size: 0.88rem;
+  color: #c4b5fd;
+  line-height: 1.6;
+  background: rgba(167,139,250,0.06);
+  border: 1px solid rgba(167,139,250,0.15);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+@media (max-width: 600px) {
+  .modal-card { border-radius: 16px; }
+  .modal-header, .modal-body { padding-left: 1.1rem; padding-right: 1.1rem; }
 }
 
 /* ── Delete button ──────────────────────────────────────────────────────── */
@@ -793,6 +997,19 @@ a:hover {
   animation: none !important;
 }
 .btn-gen-one::after { display: none; }
+
+.btn-gen-one.btn-regen {
+  background: rgba(34,211,238,0.08);
+  color: #22d3ee;
+  border-color: rgba(34,211,238,0.25);
+  font-size: 0.85rem;
+}
+.btn-gen-one.btn-regen:hover {
+  background: rgba(34,211,238,0.2);
+  color: #67e8f9;
+  border-color: rgba(34,211,238,0.5);
+  box-shadow: 0 0 14px rgba(34,211,238,0.25);
+}
 
 /* Generating state inside cell */
 .ai-generating {

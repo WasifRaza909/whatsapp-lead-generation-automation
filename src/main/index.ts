@@ -7,8 +7,8 @@ import {
   getLeads,
   deleteLead,
   deleteAllLeads,
-  getLeadsWithoutAiMessage,
-  updateLeadAiMessage,
+  getLeadsWithoutCustomMessage,
+  updateLeadCustomMessage,
   type Lead
 } from './database'
 import { scrapeGoogleMaps, stopScrape, type ScrapeOptions } from './scraper'
@@ -110,7 +110,7 @@ app.whenReady().then(() => {
       ? { apiKey: payload, service: undefined }
       : payload
 
-    const leads = getLeadsWithoutAiMessage()
+    const leads = getLeadsWithoutCustomMessage()
     if (leads.length === 0) return { processed: 0 }
 
     let processed = 0
@@ -140,7 +140,7 @@ app.whenReady().then(() => {
 
         if (aiAbortFlag) break
 
-        updateLeadAiMessage(lead.id!, message)
+        updateLeadCustomMessage(lead.id!, message)
         processed++
 
         if (!win.isDestroyed()) {
@@ -195,7 +195,7 @@ app.whenReady().then(() => {
         website: lead.website,
         service
       })
-      updateLeadAiMessage(lead.id!, message)
+      updateLeadCustomMessage(lead.id!, message)
       return { leadId, message }
     }
   )

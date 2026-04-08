@@ -193,6 +193,13 @@ export async function scrapeGoogleMaps(
           )
           .catch(() => '')
 
+        // Email — try to find a mailto: link on the detail panel
+        const email = await page
+          .$eval('a[href^="mailto:"]', (el) =>
+            (el as HTMLAnchorElement).href.replace('mailto:', '').split('?')[0].trim()
+          )
+          .catch(() => '')
+
         // Address
         const address = await page
           .$eval(
@@ -213,7 +220,8 @@ export async function scrapeGoogleMaps(
           phone: phone.trim(),
           address: address.trim(),
           website: website.trim(),
-          ai_message: ''
+          email: email.trim(),
+          custom_message: ''
         }
 
         // Persist to DB (deduplication inside saveLeadIfNew)

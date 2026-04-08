@@ -7,7 +7,8 @@ interface Lead {
   phone: string
   address: string
   website: string
-  ai_message: string
+  email: string
+  custom_message: string
 }
 
 interface AiProgress {
@@ -54,8 +55,17 @@ function App(): React.ReactElement {
   const [pageSize, setPageSize] = useState(10)
   const [sortBy, setSortBy] = useState<keyof Lead | null>(null)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
 
-  // load leads on mount
+  // Close modal on Escape
+  useEffect(() => {
+    if (!selectedLead) return
+    const handler = (e: KeyboardEvent): void => { if (e.key === 'Escape') setSelectedLead(null) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [selectedLead])
+
   useEffect(() => {
     window.api.getLeads().then(setLeads).catch(console.error)
   }, [])
@@ -164,7 +174,7 @@ function App(): React.ReactElement {
     const dummy: Omit<Lead, 'id'> = {
       name: 'Test Business', phone: '+1 234 567 8900',
       address: '123 Main St, New York, NY 10001',
-      website: 'https://example.com', ai_message: ''
+      website: 'https://example.com', email: 'hello@example.com', custom_message: ''
     }
     const saved = await window.api.saveLead(dummy)
     setLeads((prev) => [saved, ...prev])
@@ -189,7 +199,7 @@ function App(): React.ReactElement {
       setAiProgress({ current: p.current, total: p.total, lastName: p.leadName })
       if (p.status === 'done' && p.message !== undefined) {
         setLeads((prev) =>
-          prev.map((l) => (l.id === p.leadId ? { ...l, ai_message: p.message! } : l))
+          prev.map((l) => (l.id === p.leadId ? { ...l, custom_message: p.message! } : l))
         )
       }
     })
@@ -198,12 +208,13 @@ function App(): React.ReactElement {
     try {
       const result = await window.api.processWithAI({ apiKey, service })
       setAiState('done')
+      setAiError(null)
       setStatus(`✨ AI wrote ${result.processed} message(s).`)
       const updated = await window.api.getLeads()
       setLeads(updated)
     } catch (err) {
       setAiState('error')
-      setStatus(`AI Error: ${String(err)}`)
+      setAiError(String(err).replace(/^Error:\s*/, ''))
     } finally {
       unsub()
       aiUnsubRef.current = null
@@ -219,10 +230,11 @@ function App(): React.ReactElement {
     try {
       const { message } = await window.api.generateOne({ apiKey, leadId, service })
       setLeads((prev) =>
-        prev.map((l) => (l.id === leadId ? { ...l, ai_message: message } : l))
+        prev.map((l) => (l.id === leadId ? { ...l, custom_message: message } : l))
       )
+      setAiError(null)
     } catch (err) {
-      setStatus(`AI Error: ${String(err)}`)
+      setAiError(String(err).replace(/^Error:\s*/, ''))
     } finally {
       setGeneratingIds((prev) => { const n = new Set(prev); n.delete(leadId); return n })
     }
@@ -250,7 +262,7 @@ function App(): React.ReactElement {
   // ── Derived ───────────────────────────────────────────────────────────────
   const isRunning        = scraperState === 'running'
   const statusClass      = scraperState === 'error' ? 'err' : scraperState === 'done' ? 'ok' : ''
-  const unprocessedCount = leads.filter((l) => !l.ai_message).length
+  const unprocessedCount = leads.filter((l) => !l.custom_message).length
   const hasKey           = !!localStorage.getItem(LS_KEY)
   const aiPercent        = aiProgress.total > 0
     ? Math.round((aiProgress.current / aiProgress.total) * 100)
@@ -401,7 +413,7 @@ function App(): React.ReactElement {
               {leads.length > 0 && (
                 <button className="btn-reset" onClick={handleResetAllLeads} disabled={isRunning}
                   title="Delete all scraped leads">
-                  🗑 Reset Leads
+                  🗑 Clear DataBase
                 </button>
               )}
             </div>
@@ -473,6 +485,15 @@ function App(): React.ReactElement {
                 </div>
               </div>
 
+              {/* AI error banner */}
+              {aiError && (
+                <div className="ai-error-banner">
+                  <span className="ai-error-icon">⚠</span>
+                  <span className="ai-error-msg">{aiError}</span>
+                  <button className="ai-error-close" onClick={() => setAiError(null)}>✕</button>
+                </div>
+              )}
+
               {/* AI progress bar */}
               {aiState === 'running' && (
                 <div className="ai-progress-wrap">
@@ -509,6 +530,12 @@ function App(): React.ReactElement {
                           <span className={`sort-indicator ${sortBy === 'phone' ? sortDir : ''}`} />
                         </button>
                       </th>
+                      <th aria-sort={sortBy === 'email' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                        <button className={`th-btn${sortBy === 'email' ? ' active' : ''}`} onClick={() => handleSort('email')}>
+                          <span className="th-label">Email</span>
+                          <span className={`sort-indicator ${sortBy === 'email' ? sortDir : ''}`} />
+                        </button>
+                      </th>
                       <th aria-sort={sortBy === 'address' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'address' ? ' active' : ''}`} onClick={() => handleSort('address')}>
                           <span className="th-label">Address</span>
@@ -521,10 +548,10 @@ function App(): React.ReactElement {
                           <span className={`sort-indicator ${sortBy === 'website' ? sortDir : ''}`} />
                         </button>
                       </th>
-                      <th aria-sort={sortBy === 'ai_message' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                        <button className={`th-btn${sortBy === 'ai_message' ? ' active' : ''}`} onClick={() => handleSort('ai_message')}>
+                      <th aria-sort={sortBy === 'custom_message' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                        <button className={`th-btn${sortBy === 'custom_message' ? ' active' : ''}`} onClick={() => handleSort('custom_message')}>
                           <span className="th-label">AI Message</span>
-                          <span className={`sort-indicator ${sortBy === 'ai_message' ? sortDir : ''}`} />
+                          <span className={`sort-indicator ${sortBy === 'custom_message' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th></th>
@@ -539,6 +566,11 @@ function App(): React.ReactElement {
                           <td className="td-num" data-label="#">{lead.id ?? '—'}</td>
                           <td className="td-name" data-label="Business Name">{lead.name}</td>
                           <td className="td-phone" data-label="Phone">{lead.phone || <span className="muted">—</span>}</td>
+                          <td className="td-email" data-label="Email">
+                            {lead.email ? (
+                              <a href={`mailto:${lead.email}`}>{lead.email}</a>
+                            ) : <span className="muted">—</span>}
+                          </td>
                           <td className="td-addr" data-label="Address" title={lead.address}>
                             {lead.address || <span className="muted">—</span>}
                           </td>
@@ -550,9 +582,9 @@ function App(): React.ReactElement {
                             ) : <span className="muted">—</span>}
                           </td>
                           <td className="td-ai" data-label="AI Message">
-                            {lead.ai_message ? (
-                              <span className="ai-msg" title={lead.ai_message}>
-                                {lead.ai_message}
+                            {lead.custom_message ? (
+                              <span className="ai-msg" title={lead.custom_message}>
+                                {lead.custom_message}
                               </span>
                             ) : generatingIds.has(lead.id!) ? (
                               <span className="ai-generating">
@@ -566,13 +598,20 @@ function App(): React.ReactElement {
                             ) : <span className="muted">—</span>}
                           </td>
                           <td className="td-actions" data-label="Actions">
-                            {!lead.ai_message && !generatingIds.has(lead.id!) && aiState !== 'running' && (
+                            <button
+                              className="btn-view"
+                              onClick={() => setSelectedLead(lead)}
+                              title="View full details"
+                            >
+                              👁
+                            </button>
+                            {!generatingIds.has(lead.id!) && aiState !== 'running' && (
                               <button
-                                className="btn-gen-one"
+                                className={`btn-gen-one${lead.custom_message ? ' btn-regen' : ''}`}
                                 onClick={() => handleGenerateOne(lead.id!)}
-                                title="Generate AI message for this lead"
+                                title={lead.custom_message ? 'Regenerate AI message' : 'Generate AI message for this lead'}
                               >
-                                ✨
+                                {lead.custom_message ? '🔄' : '✨'}
                               </button>
                             )}
                             <button className="btn-del" onClick={() => handleDelete(lead.id)}
@@ -625,6 +664,59 @@ function App(): React.ReactElement {
             </section>
           )}
         </>
+      )}
+
+      {/* ═══════════════ LEAD DETAIL MODAL ══════════════ */}
+      {selectedLead && (
+        <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <span className="modal-icon">📍</span>
+                <div>
+                  <h2 className="modal-title">{selectedLead.name}</h2>
+                  <span className="modal-subtitle">Lead Details</span>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setSelectedLead(null)} title="Close (Esc)">✕</button>
+            </div>
+
+            {/* Body */}
+            <div className="modal-body">
+              <div className="modal-field">
+                <span className="modal-field__label">📞 Phone</span>
+                <span className="modal-field__value">{selectedLead.phone || '—'}</span>
+              </div>
+              <div className="modal-field">
+                <span className="modal-field__label">📧 Email</span>
+                <span className="modal-field__value">
+                  {selectedLead.email
+                    ? <a href={`mailto:${selectedLead.email}`}>{selectedLead.email}</a>
+                    : '—'}
+                </span>
+              </div>
+              <div className="modal-field">
+                <span className="modal-field__label">📍 Address</span>
+                <span className="modal-field__value">{selectedLead.address || '—'}</span>
+              </div>
+              <div className="modal-field">
+                <span className="modal-field__label">🌐 Website</span>
+                <span className="modal-field__value">
+                  {selectedLead.website
+                    ? <a href={selectedLead.website} target="_blank" rel="noreferrer">{selectedLead.website}</a>
+                    : '—'}
+                </span>
+              </div>
+              {selectedLead.custom_message && (
+                <div className="modal-field modal-field--ai">
+                  <span className="modal-field__label">✨ AI Message</span>
+                  <p className="modal-ai-msg">{selectedLead.custom_message}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
