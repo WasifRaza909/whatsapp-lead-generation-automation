@@ -38,6 +38,7 @@ function App(): React.ReactElement {
   const [status, setStatus]           = useState('')
   const [scraperState, setScraperState] = useState<ScraperState>('idle')
   const [newLeadIds, setNewLeadIds]   = useState<Set<number | string>>(new Set())
+  const [sessionLeadCount, setSessionLeadCount] = useState(0)
   const unsubRef = useRef<Array<() => void>>([])
 
   // ── AI ────────────────────────────────────────────────────────────────────
@@ -46,11 +47,28 @@ function App(): React.ReactElement {
     current: number; total: number; lastName: string
   }>({ current: 0, total: 0, lastName: '' })
   const aiUnsubRef = useRef<(() => void) | null>(null)
+  const tableRef    = useRef<HTMLElement>(null)
 
   // load leads on mount
   useEffect(() => {
     window.api.getLeads().then(setLeads).catch(console.error)
   }, [])
+
+  // refresh leads from DB whenever scraping finishes (catches any missed IPC events)
+  useEffect(() => {
+    if (scraperState === 'done' || scraperState === 'error') {
+      window.api.getLeads().then(setLeads).catch(console.error)
+    }
+  }, [scraperState])
+
+  // auto-scroll to leads table when scraping completes
+  useEffect(() => {
+    if (scraperState === 'done') {
+      setTimeout(() => {
+        tableRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 250)
+    }
+  }, [scraperState])
 
   // cleanup on unmount
   useEffect(() => {
@@ -78,9 +96,11 @@ function App(): React.ReactElement {
     unsubRef.current = []
     setScraperState('running')
     setStatus('Initialising scraper…')
+    setSessionLeadCount(0)
 
     const unsubLead = window.api.onLead((lead: Lead) => {
       setLeads((prev) => [lead, ...prev])
+      setSessionLeadCount((c) => c + 1)
       markNew(lead.id ?? lead.name)
     })
     const unsubStatus = window.api.onStatus((msg: string) => {
@@ -93,9 +113,14 @@ function App(): React.ReactElement {
 
     try {
       await window.api.startScrape({ keyword: keyword.trim(), location: location.trim(), maxResults })
+      // Explicitly transition — don't rely solely on IPC send timing
+      setScraperState((prev) => (prev === 'running' ? 'done' : prev))
     } catch (err) {
       setStatus(`Error: ${String(err)}`)
       setScraperState('error')
+    } finally {
+      // Always refresh leads from DB when scraping finishes
+      window.api.getLeads().then(setLeads).catch(console.error)
     }
   }
 
@@ -109,6 +134,16 @@ function App(): React.ReactElement {
     if (!id) return
     await window.api.deleteLead(id)
     setLeads((prev) => prev.filter((l) => l.id !== id))
+  }
+
+  const handleResetAllLeads = async (): Promise<void> => {
+    const confirmed = window.confirm(
+      `Delete all ${leads.length} lead(s)? This action cannot be undone.`
+    )
+    if (!confirmed) return
+    await window.api.deleteAllLeads()
+    setLeads([])
+    setStatus('✓ All leads have been reset.')
   }
 
   const handleTestDB = async (): Promise<void> => {
@@ -158,6 +193,14 @@ function App(): React.ReactElement {
       aiUnsubRef.current = null
       setAiProgress({ current: 0, total: 0, lastName: '' })
     }
+  }
+
+  const handleStopAI = async (): Promise<void> => {
+    await window.api.stopAI()
+    setAiState('idle')
+    setStatus('AI processing stopped.')
+    const updated = await window.api.getLeads()
+    setLeads(updated)
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -273,19 +316,49 @@ function App(): React.ReactElement {
                 <button className="btn-danger" onClick={handleStop}>⏹ Stop</button>
               )}
               <button className="btn-ghost" onClick={handleTestDB} disabled={isRunning}>🗄 Test DB</button>
+              {leads.length > 0 && (
+                <button className="btn-reset" onClick={handleResetAllLeads} disabled={isRunning}
+                  title="Delete all scraped leads">
+                  🗑 Reset Leads
+                </button>
+              )}
             </div>
-            {status && (
+            {/* Status line (only shown when not actively scraping) */}
+            {!isRunning && status && (
               <div className="scan-indicator">
-                {isRunning && <div className="scan-rings"><span /><span /><span /></div>}
                 <span className={`scan-text ${statusClass}`}>{status}</span>
               </div>
             )}
-            {isRunning && <div className="progress-bar"><div className="progress-bar__fill" /></div>}
           </section>
+
+          {/* ── Scraping loader — lives OUTSIDE form-card so animations aren't clipped ── */}
+          {isRunning && (
+            <div className="scrape-loader">
+              <div className="scrape-loader__radar">
+                <span className="scrape-loader__ring" />
+                <span className="scrape-loader__ring" />
+                <span className="scrape-loader__ring" />
+                <div className="scrape-loader__core" />
+              </div>
+              <div className="scrape-loader__body">
+                <div className="scrape-loader__header">
+                  <span className="scrape-loader__title">⚡ Scanning Google Maps</span>
+                  <span className="scrape-loader__count">
+                    <span className="scrape-loader__count-val">{sessionLeadCount}</span>
+                    <span className="scrape-loader__count-label"> leads found</span>
+                  </span>
+                </div>
+                <div className="scrape-loader__status">{status || 'Initialising…'}</div>
+                <div className="scrape-loader__bar">
+                  <div className="scrape-loader__bar-fill" />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Leads Table */}
           {leads.length > 0 && (
-            <section className="table-wrap">
+            <section className="table-wrap" ref={tableRef}>
               <div className="table-header">
                 <span className="table-title">Captured Leads</span>
                 <div className="table-actions">
@@ -308,6 +381,9 @@ function App(): React.ReactElement {
                       {aiProgress.total > 0 && (
                         <span className="ai-running-pct">{aiPercent}%</span>
                       )}
+                      <button className="btn-ai-stop" onClick={handleStopAI} title="Stop AI processing">
+                        ✕
+                      </button>
                     </div>
                   )}
                   <span className="leads-badge" key={leads.length}>{leads.length}</span>

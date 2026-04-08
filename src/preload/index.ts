@@ -35,6 +35,8 @@ const api = {
     ipcRenderer.invoke('db:getLeads'),
   deleteLead: (id: number): Promise<void> =>
     ipcRenderer.invoke('db:deleteLead', id),
+  deleteAllLeads: (): Promise<void> =>
+    ipcRenderer.invoke('db:deleteAllLeads'),
 
   // ── Scraper ───────────────────────────────────────────────────────────────
   startScrape: (opts: ScrapeOptions): Promise<void> =>
@@ -59,6 +61,9 @@ const api = {
 
   processWithAI: (apiKey: string): Promise<{ processed: number }> =>
     ipcRenderer.invoke('ai:processLeads', apiKey),
+
+  stopAI: (): Promise<void> =>
+    ipcRenderer.invoke('ai:stop'),
 
   onAiProgress: (cb: (progress: AiProgress) => void): (() => void) => {
     const handler = (_e: Electron.IpcRendererEvent, progress: AiProgress): void => cb(progress)

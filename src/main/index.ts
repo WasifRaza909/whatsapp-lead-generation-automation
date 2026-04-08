@@ -6,6 +6,7 @@ import {
   saveLead,
   getLeads,
   deleteLead,
+  deleteAllLeads,
   getLeadsWithoutAiMessage,
   updateLeadAiMessage,
   type Lead
@@ -13,10 +14,13 @@ import {
 import { scrapeGoogleMaps, stopScrape, type ScrapeOptions } from './scraper'
 import { generatePersonalizedMessage, validateApiKey } from './gemini'
 
+let aiAbortFlag = false
+
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
     width: 1200,
-    height: 800,
+    height: 950,
+    minHeight: 700,
     show: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -60,6 +64,11 @@ app.whenReady().then(() => {
     deleteLead(id)
   })
 
+  // IPC: delete all leads
+  ipcMain.handle('db:deleteAllLeads', () => {
+    deleteAllLeads()
+  })
+
   // IPC: start Google Maps scrape — streams results back via win.webContents.send
   ipcMain.handle(
     'scraper:start',
@@ -90,8 +99,11 @@ app.whenReady().then(() => {
     if (leads.length === 0) return { processed: 0 }
 
     let processed = 0
+    aiAbortFlag = false
 
     for (const lead of leads) {
+      if (aiAbortFlag) break
+
       // Signal "started processing this lead"
       if (!win.isDestroyed()) {
         win.webContents.send('ai:progress', {
@@ -109,6 +121,9 @@ app.whenReady().then(() => {
           address: lead.address,
           website: lead.website
         })
+
+        if (aiAbortFlag) break
+
         updateLeadAiMessage(lead.id!, message)
         processed++
 
@@ -123,6 +138,8 @@ app.whenReady().then(() => {
           })
         }
       } catch (err) {
+        if (aiAbortFlag) break
+
         if (!win.isDestroyed()) {
           win.webContents.send('ai:progress', {
             total: leads.length,
@@ -140,6 +157,11 @@ app.whenReady().then(() => {
     }
 
     return { processed }
+  })
+
+  // IPC: abort AI processing
+  ipcMain.handle('ai:stop', async () => {
+    aiAbortFlag = true
   })
 
   createWindow()

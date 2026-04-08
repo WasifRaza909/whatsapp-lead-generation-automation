@@ -70,3 +70,7 @@ export function getLeadsWithoutAiMessage(): Lead[] {
 export function updateLeadAiMessage(id: number, aiMessage: string): void {
   db.prepare('UPDATE leads SET ai_message = ? WHERE id = ?').run(aiMessage, id)
 }
+
+export function deleteAllLeads(): void {
+  db.prepare('DELETE FROM leads').run()
+}

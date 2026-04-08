@@ -32,6 +32,7 @@ declare global {
       saveLead: (lead: Omit<Lead, 'id'>) => Promise<Lead>
       getLeads: () => Promise<Lead[]>
       deleteLead: (id: number) => Promise<void>
+      deleteAllLeads: () => Promise<void>
       // Scraper
       startScrape: (opts: ScrapeOptions) => Promise<void>
       stopScrape: () => Promise<void>
@@ -40,6 +41,7 @@ declare global {
       // Gemini AI
       validateApiKey: (apiKey: string) => Promise<void>
       processWithAI: (apiKey: string) => Promise<{ processed: number }>
+      stopAI: () => Promise<void>
       onAiProgress: (cb: (progress: AiProgress) => void) => () => void
     }
   }

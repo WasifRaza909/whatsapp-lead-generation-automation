@@ -1,10 +1,10 @@
 /**
  * Gemini AI service — uses the Gemini REST API (no SDK dependency required).
- * Model: gemini-1.5-flash-latest  (free tier · 15 RPM · 1M TPD)
+ * Model: gemini-2.5-flash  (free tier)
  */
 
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent'
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent'
 
 export interface LeadData {
   name: string

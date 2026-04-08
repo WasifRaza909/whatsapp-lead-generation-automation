@@ -126,7 +126,7 @@ export default function SettingsPage(): React.ReactElement {
         <h3 className="settings-info-title">ℹ How it works</h3>
         <ul className="settings-info-list">
           <li>
-            <strong>Model:</strong> <code>gemini-1.5-flash-latest</code> — Google's latest free-tier model.
+            <strong>Model:</strong> <code>gemini-2.5-flash</code> — Google's best price-performance free-tier model.
           </li>
           <li>
             <strong>Rate limit:</strong> Free tier allows ~15 requests/min. The processor automatically
