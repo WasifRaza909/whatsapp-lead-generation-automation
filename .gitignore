@@ -2,3 +2,4 @@ node_modules/
 out/
 dist/
 *.db
+.electron-user-data/
