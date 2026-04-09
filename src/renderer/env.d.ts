@@ -45,6 +45,7 @@ declare global {
       generateOne: (payload: { apiKey: string; leadId: number; service?: string }) => Promise<{ leadId: number; message: string }>
       stopAI: () => Promise<void>
       onAiProgress: (cb: (progress: AiProgress) => void) => () => void
+      appReady: () => void
     }
   }
 }

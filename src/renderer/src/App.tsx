@@ -35,7 +35,7 @@ function App(): React.ReactElement {
   // ── Scraper ───────────────────────────────────────────────────────────────
   const [keyword, setKeyword]         = useState('')
   const [location, setLocation]       = useState('')
-  const [maxResults, setMaxResults]   = useState(40)
+  const [maxResults, setMaxResults]   = useState(5)
   const [leads, setLeads]             = useState<Lead[]>([])
   const [status, setStatus]           = useState('')
   const [scraperState, setScraperState] = useState<ScraperState>('idle')
@@ -59,6 +59,12 @@ function App(): React.ReactElement {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
 
   // Close modal on Escape
+  // Signal main process that React has rendered — window is shown only after this,
+  // eliminating the flash where the background appears before elements render.
+  useEffect(() => {
+    window.api.appReady()
+  }, [])
+
   useEffect(() => {
     if (!selectedLead) return
     const handler = (e: KeyboardEvent): void => { if (e.key === 'Escape') setSelectedLead(null) }
@@ -306,16 +312,16 @@ function App(): React.ReactElement {
   })()
 
   return (
-    <div className="container">
+    <div className="container max-w-[1220px] mx-auto px-8 py-10 relative z-[1]">
 
       {/* ── Header ── */}
-      <header>
-        <div className="header-badge">
-          <span className="badge-dot" />
+      <header className="mb-10">
+        <div className="inline-flex items-center gap-2 bg-[rgba(34,211,238,0.07)] border border-[rgba(34,211,238,0.18)] rounded-full py-[0.3rem] px-[0.95rem] text-[0.65rem] font-bold text-cyan uppercase tracking-[0.14em] mb-[0.9rem] w-fit">
+          <span className="w-[7px] h-[7px] rounded-full bg-cyan animate-breathe" style={{ boxShadow: '0 0 8px #22d3ee, 0 0 16px rgba(34,211,238,0.4)' }} />
           WhatsMaps AI · Live Scraper
         </div>
-        <h1>WhatsMaps AI</h1>
-        <p className="subtitle">Google Maps Scraper &amp; WhatsApp AI Sender</p>
+        <h1 className="text-[clamp(2.1rem,4.5vw,3rem)] font-black tracking-[-0.045em] leading-[1.08] animate-grad-shift">WhatsMaps AI</h1>
+        <p className="mt-[0.4rem] text-app-text-dim text-[0.88rem] font-medium tracking-[0.02em]">Google Maps Scraper &amp; WhatsApp AI Sender</p>
       </header>
 
       {/* ── Tab nav ── */}
@@ -342,39 +348,39 @@ function App(): React.ReactElement {
       {activeTab === 'scraper' && (
         <>
           {/* Stats strip */}
-          <div className="stats-strip">
-            <div className="stat-chip">
-              <span className="stat-chip__icon">📍</span>
-              <div className="stat-chip__body">
-                <span className="stat-chip__value">{leads.length}</span>
-                <span className="stat-chip__label">Total Leads</span>
+          <div className="flex gap-3 mb-6 flex-wrap">
+            <div className="flex items-center gap-[0.6rem] bg-white/[0.025] border border-white/[0.06] rounded-[10px] py-[0.6rem] px-[1.1rem]">
+              <span className="text-[1.1rem]">📍</span>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-cyan text-[1.15rem] leading-none">{leads.length}</span>
+                <span className="text-app-text-mute text-[0.68rem] uppercase tracking-[0.09em] mt-[0.1rem]">Total Leads</span>
               </div>
             </div>
-            <div className="stat-chip">
-              <span className="stat-chip__icon">{isRunning ? '⚡' : '💤'}</span>
-              <div className="stat-chip__body">
-                <span className="stat-chip__value"
+            <div className="flex items-center gap-[0.6rem] bg-white/[0.025] border border-white/[0.06] rounded-[10px] py-[0.6rem] px-[1.1rem]">
+              <span className="text-[1.1rem]">{isRunning ? '⚡' : '💤'}</span>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-cyan text-[1.15rem] leading-none"
                   style={{ color: isRunning ? '#22d3ee' : '#334155' }}>
                   {isRunning ? 'LIVE' : scraperState === 'done' ? 'DONE' : 'IDLE'}
                 </span>
-                <span className="stat-chip__label">Scraper</span>
+                <span className="text-app-text-mute text-[0.68rem] uppercase tracking-[0.09em] mt-[0.1rem]">Scraper</span>
               </div>
             </div>
-            <div className="stat-chip">
-              <span className="stat-chip__icon">✨</span>
-              <div className="stat-chip__body">
-                <span className="stat-chip__value"
+            <div className="flex items-center gap-[0.6rem] bg-white/[0.025] border border-white/[0.06] rounded-[10px] py-[0.6rem] px-[1.1rem]">
+              <span className="text-[1.1rem]">✨</span>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-cyan text-[1.15rem] leading-none"
                   style={{ color: unprocessedCount > 0 ? '#f59e0b' : '#22d3ee' }}>
                   {leads.length - unprocessedCount}/{leads.length}
                 </span>
-                <span className="stat-chip__label">AI Processed</span>
+                <span className="text-app-text-mute text-[0.68rem] uppercase tracking-[0.09em] mt-[0.1rem]">AI Processed</span>
               </div>
             </div>
-            <div className="stat-chip">
-              <span className="stat-chip__icon">🎯</span>
-              <div className="stat-chip__body">
-                <span className="stat-chip__value">{maxResults}</span>
-                <span className="stat-chip__label">Max Target</span>
+            <div className="flex items-center gap-[0.6rem] bg-white/[0.025] border border-white/[0.06] rounded-[10px] py-[0.6rem] px-[1.1rem]">
+              <span className="text-[1.1rem]">🎯</span>
+              <div className="flex flex-col">
+                <span className="font-extrabold text-cyan text-[1.15rem] leading-none">{maxResults}</span>
+                <span className="text-app-text-mute text-[0.68rem] uppercase tracking-[0.09em] mt-[0.1rem]">Max Target</span>
               </div>
             </div>
           </div>
@@ -382,28 +388,66 @@ function App(): React.ReactElement {
           {/* Search Form */}
           {!isRunning && (
             <section className="form-card">
-            <p className="form-card__title">🔍 Search Configuration</p>
-            <div className="form-row">
-              <div className="field">
+            <p className="text-[0.68rem] font-extrabold text-app-text-mute uppercase tracking-[0.13em] mb-[1.4rem]">🔍 Search Configuration</p>
+            <div className="flex gap-4 flex-wrap mb-5">
+              <div className="flex flex-col flex-1 min-w-[160px]">
                 <label>Keyword</label>
                 <input type="text" placeholder="e.g. Dentists, Restaurants, Gyms…"
                   value={keyword} onChange={(e) => setKeyword(e.target.value)}
                   disabled={isRunning} />
               </div>
-              <div className="field">
+              <div className="flex flex-col flex-1 min-w-[160px]">
                 <label>Location</label>
                 <input type="text" placeholder="e.g. Karachi, Dubai, New York…"
                   value={location} onChange={(e) => setLocation(e.target.value)}
                   disabled={isRunning} />
               </div>
-              <div className="field field--sm">
+              <div className="flex flex-col flex-1 min-w-[160px] max-w-[130px]">
                 <label>Max Results</label>
-                <input type="number" min={5} max={200} value={maxResults}
-                  onChange={(e) => setMaxResults(Number(e.target.value))}
-                  disabled={isRunning} />
+                <div className="number-stepper" role="group" aria-label="Max Results">
+                  <button
+                    type="button"
+                    className="number-stepper__btn"
+                    onClick={() => setMaxResults((prev) => Math.max(5, prev - 5))}
+                    disabled={isRunning || maxResults <= 5}
+                    aria-label="Decrease max results"
+                  >
+                    −
+                  </button>
+                  <input
+                    className="number-stepper__input"
+                    type="number"
+                    min={5}
+                    max={200}
+                    value={maxResults}
+                    onChange={(e) => {
+                      const v = Number(e.target.value)
+                      if (Number.isNaN(v)) return
+                      setMaxResults(Math.max(5, Math.min(200, Math.round(v))))
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'ArrowUp') { e.preventDefault(); setMaxResults((p) => Math.min(200, p + 5)) }
+                      else if (e.key === 'ArrowDown') { e.preventDefault(); setMaxResults((p) => Math.max(5, p - 5)) }
+                      else if (e.key === 'PageUp') { e.preventDefault(); setMaxResults((p) => Math.min(200, p + 10)) }
+                      else if (e.key === 'PageDown') { e.preventDefault(); setMaxResults((p) => Math.max(5, p - 10)) }
+                    }}
+                    onBlur={() => setMaxResults((p) => Math.max(5, Math.min(200, Math.round(p))))}
+                    disabled={isRunning}
+                    aria-label="Max results value"
+                  />
+                  <button
+                    type="button"
+                    className="number-stepper__btn"
+                    onClick={() => setMaxResults((prev) => Math.min(200, prev + 5))}
+                    disabled={isRunning || maxResults >= 200}
+                    aria-label="Increase max results"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
             </div>
-            <div className="form-actions">
+            <div className="flex items-center gap-[0.8rem] flex-wrap mb-4">
               {!isRunning ? (
                 <button className="btn-primary" onClick={handleStart}>🚀 Start Scraping</button>
               ) : (
@@ -419,8 +463,8 @@ function App(): React.ReactElement {
             </div>
             {/* Status line (only shown when not actively scraping) */}
             {!isRunning && status && (
-              <div className="scan-indicator">
-                <span className={`scan-text ${statusClass}`}>{status}</span>
+              <div className="flex items-center gap-[0.7rem] mt-[0.9rem]">
+                <span className={`text-[0.82rem] font-semibold transition-colors duration-[400ms] ${statusClass === 'err' ? 'text-red' : statusClass === 'ok' ? 'text-green' : 'text-cyan'}`}>{status}</span>
               </div>
             )}
             </section>
@@ -429,22 +473,22 @@ function App(): React.ReactElement {
           {/* ── Scraping loader — lives OUTSIDE form-card so animations aren't clipped ── */}
           {isRunning && (
             <div className="scrape-loader">
-              <div className="scrape-loader__radar">
+              <div className="relative w-10 h-10 shrink-0 overflow-visible">
                 <span className="scrape-loader__ring" />
                 <span className="scrape-loader__ring" />
                 <span className="scrape-loader__ring" />
                 <div className="scrape-loader__core" />
               </div>
-              <div className="scrape-loader__body">
-                <div className="scrape-loader__header">
-                  <span className="scrape-loader__title">⚡ Scanning Google Maps</span>
-                  <span className="scrape-loader__count">
-                    <span className="scrape-loader__count-val">{sessionLeadCount}</span>
-                    <span className="scrape-loader__count-label"> leads found</span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline justify-between gap-2 mb-[0.4rem]">
+                  <span className="text-[0.68rem] font-extrabold text-cyan uppercase tracking-[0.13em]">⚡ Scanning Google Maps</span>
+                  <span className="flex items-baseline gap-1">
+                    <span className="text-xl font-black text-cyan leading-none tabular-nums" style={{ textShadow: '0 0 16px rgba(34,211,238,0.4)' }}>{sessionLeadCount}</span>
+                    <span className="text-[0.62rem] font-bold text-app-text-dim uppercase tracking-[0.09em]"> leads found</span>
                   </span>
                 </div>
-                <div className="scrape-loader__status">{status || 'Initialising…'}</div>
-                <div className="scrape-loader__bar">
+                <div className="text-[0.83rem] font-medium text-app-text whitespace-nowrap overflow-hidden text-ellipsis mb-[0.65rem] min-h-[1.2em] transition-opacity duration-[250ms]">{status || 'Initialising…'}</div>
+                <div className="h-[3px] bg-[rgba(51,65,85,0.4)] rounded-full overflow-hidden relative">
                   <div className="scrape-loader__bar-fill" />
                 </div>
               </div>
@@ -453,10 +497,10 @@ function App(): React.ReactElement {
 
           {/* Leads Table */}
           {leads.length > 0 && (
-            <section className="table-wrap" ref={tableRef}>
-              <div className="table-header">
-                <span className="table-title">Captured Leads</span>
-                <div className="table-actions">
+            <section className="" ref={tableRef}>
+              <div className="flex items-center justify-between mb-[1.1rem]">
+                <span className="text-[0.65rem] font-extrabold text-app-text-dim uppercase tracking-[0.14em]">Captured Leads</span>
+                <div className="flex items-center gap-3">
                   {aiState !== 'running' ? (
                     <button
                       className={`btn-ai${!hasKey ? ' btn-ai--warn' : ''}`}
@@ -466,91 +510,91 @@ function App(): React.ReactElement {
                     >
                       ✨ Process with AI
                       {unprocessedCount > 0 && (
-                        <span className="btn-ai__badge">{unprocessedCount}</span>
+                        <span className="inline-flex items-center justify-center bg-[rgba(167,139,250,0.3)] text-purple-lightest text-[0.63rem] font-extrabold min-w-[18px] h-[18px] rounded-full px-[0.35rem] ml-[0.1rem]">{unprocessedCount}</span>
                       )}
                     </button>
                   ) : (
-                    <div className="ai-running-pill">
-                      <span className="ai-running-dot" />
+                    <div className="inline-flex items-center gap-2 bg-[rgba(167,139,250,0.1)] border border-[rgba(167,139,250,0.25)] rounded-lg py-[0.42rem] px-[0.9rem] text-[0.78rem] font-bold text-purple-light tabular-nums">
+                      <span className="w-[7px] h-[7px] rounded-full bg-purple animate-breathe-fast" style={{ boxShadow: '0 0 8px #a78bfa' }} />
                       AI {aiProgress.current}/{aiProgress.total}
                       {aiProgress.total > 0 && (
-                        <span className="ai-running-pct">{aiPercent}%</span>
+                        <span className="ml-[0.2rem] text-[rgba(196,181,253,0.6)] text-[0.72rem]">{aiPercent}%</span>
                       )}
                       <button className="btn-ai-stop" onClick={handleStopAI} title="Stop AI processing">
                         ✕
                       </button>
                     </div>
                   )}
-                  <span className="leads-badge" key={leads.length}>{leads.length}</span>
+                  <span className="inline-flex items-center justify-center bg-[rgba(34,211,238,0.1)] text-cyan font-extrabold text-[0.78rem] py-[0.18rem] px-[0.65rem] rounded-full border border-[rgba(34,211,238,0.25)] tabular-nums" style={{ boxShadow: '0 0 12px rgba(34,211,238,0.15)' }} key={leads.length}>{leads.length}</span>
                 </div>
               </div>
 
               {/* AI error banner */}
               {aiError && (
-                <div className="ai-error-banner">
-                  <span className="ai-error-icon">⚠</span>
-                  <span className="ai-error-msg">{aiError}</span>
+                <div className="flex items-center gap-[0.6rem] mb-[0.9rem] py-[0.7rem] px-4 bg-[rgba(248,113,113,0.08)] border border-[rgba(248,113,113,0.28)] rounded-[10px]">
+                  <span className="text-[0.9rem]">⚠</span>
+                  <span className="flex-1 text-[0.82rem] font-semibold text-red-light leading-[1.45]">{aiError}</span>
                   <button className="ai-error-close" onClick={() => setAiError(null)}>✕</button>
                 </div>
               )}
 
               {/* AI progress bar */}
               {aiState === 'running' && (
-                <div className="ai-progress-wrap">
-                  <div className="ai-progress-track">
+                <div className="mb-[0.9rem]">
+                  <div className="h-[3px] bg-[rgba(51,65,85,0.3)] rounded-full overflow-hidden mb-[0.45rem]">
                     <div className="ai-progress-fill" style={{ width: `${aiPercent}%` }} />
                   </div>
                   {aiProgress.lastName && (
-                    <p className="ai-progress-label">
-                      ✨ Writing for <strong>{aiProgress.lastName}</strong>…
+                    <p className="text-[0.76rem] text-[#64748b] italic">
+                      ✨ Writing for <strong className="text-purple-light not-italic">{aiProgress.lastName}</strong>…
                     </p>
                   )}
                 </div>
               )}
 
-              <div className="table-outer">
+              <div className="bg-app-surface border border-[rgba(30,41,59,0.75)] rounded-2xl overflow-hidden backdrop-blur-[16px]">
                 <table>
                   <thead>
                     <tr>
                       <th aria-sort={sortBy === 'id' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'id' ? ' active' : ''}`} onClick={() => handleSort('id')}>
-                          <span className="th-label">#</span>
+                          <span className="uppercase tracking-[0.12em]">#</span>
                           <span className={`sort-indicator ${sortBy === 'id' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th aria-sort={sortBy === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'name' ? ' active' : ''}`} onClick={() => handleSort('name')}>
-                          <span className="th-label">Business Name</span>
+                          <span className="uppercase tracking-[0.12em]">Business Name</span>
                           <span className={`sort-indicator ${sortBy === 'name' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th aria-sort={sortBy === 'phone' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'phone' ? ' active' : ''}`} onClick={() => handleSort('phone')}>
-                          <span className="th-label">Phone</span>
+                          <span className="uppercase tracking-[0.12em]">Phone</span>
                           <span className={`sort-indicator ${sortBy === 'phone' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th aria-sort={sortBy === 'email' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'email' ? ' active' : ''}`} onClick={() => handleSort('email')}>
-                          <span className="th-label">Email</span>
+                          <span className="uppercase tracking-[0.12em]">Email</span>
                           <span className={`sort-indicator ${sortBy === 'email' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th aria-sort={sortBy === 'address' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'address' ? ' active' : ''}`} onClick={() => handleSort('address')}>
-                          <span className="th-label">Address</span>
+                          <span className="uppercase tracking-[0.12em]">Address</span>
                           <span className={`sort-indicator ${sortBy === 'address' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th aria-sort={sortBy === 'website' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'website' ? ' active' : ''}`} onClick={() => handleSort('website')}>
-                          <span className="th-label">Website</span>
+                          <span className="uppercase tracking-[0.12em]">Website</span>
                           <span className={`sort-indicator ${sortBy === 'website' ? sortDir : ''}`} />
                         </button>
                       </th>
                       <th aria-sort={sortBy === 'custom_message' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'custom_message' ? ' active' : ''}`} onClick={() => handleSort('custom_message')}>
-                          <span className="th-label">AI Message</span>
+                          <span className="uppercase tracking-[0.12em]">AI Message</span>
                           <span className={`sort-indicator ${sortBy === 'custom_message' ? sortDir : ''}`} />
                         </button>
                       </th>
@@ -563,41 +607,41 @@ function App(): React.ReactElement {
                       const uniqueKey = lead.id ?? (currentPage * pageSize + idx)
                       return (
                         <tr key={uniqueKey} className={newLeadIds.has(key) ? 'row-new' : ''}>
-                          <td className="td-num" data-label="#">{lead.id ?? '—'}</td>
-                          <td className="td-name" data-label="Business Name">{lead.name}</td>
-                          <td className="td-phone" data-label="Phone">{lead.phone || <span className="muted">—</span>}</td>
-                          <td className="td-email" data-label="Email">
+                          <td className="text-app-text-mute w-12 text-right font-bold text-[0.74rem] tabular-nums" data-label="#">{lead.id ?? '—'}</td>
+                          <td className="text-app-text font-semibold" data-label="Business Name">{lead.name}</td>
+                          <td className="text-cyan font-mono text-[0.8rem] font-medium" data-label="Phone">{lead.phone || <span className="text-app-text-mute">—</span>}</td>
+                          <td className="max-w-[180px] whitespace-nowrap overflow-hidden text-ellipsis text-[0.8rem]" data-label="Email">
                             {lead.email ? (
                               <a href={`mailto:${lead.email}`}>{lead.email}</a>
-                            ) : <span className="muted">—</span>}
+                            ) : <span className="text-app-text-mute">—</span>}
                           </td>
-                          <td className="td-addr" data-label="Address" title={lead.address}>
-                            {lead.address || <span className="muted">—</span>}
+                          <td className="max-w-[200px] whitespace-nowrap overflow-hidden text-ellipsis text-[0.8rem]" data-label="Address" title={lead.address}>
+                            {lead.address || <span className="text-app-text-mute">—</span>}
                           </td>
                           <td data-label="Website">
                             {lead.website ? (
                               <a href={lead.website} target="_blank" rel="noreferrer">
                                 {lead.website.replace(/^https?:\/\//, '').split('/')[0]}
                               </a>
-                            ) : <span className="muted">—</span>}
+                            ) : <span className="text-app-text-mute">—</span>}
                           </td>
-                          <td className="td-ai" data-label="AI Message">
+                          <td className="max-w-[260px]" data-label="AI Message">
                             {lead.custom_message ? (
                               <span className="ai-msg" title={lead.custom_message}>
                                 {lead.custom_message}
                               </span>
                             ) : generatingIds.has(lead.id!) ? (
-                              <span className="ai-generating">
+                              <span className="inline-flex items-center gap-[0.4rem]">
                                 <span className="ai-pending-dots"><span /><span /><span /></span>
-                                <span className="ai-generating-label">Writing…</span>
+                                <span className="text-[0.72rem] text-purple italic">Writing…</span>
                               </span>
                             ) : aiState === 'running' ? (
                               <span className="ai-pending-dots">
                                 <span /><span /><span />
                               </span>
-                            ) : <span className="muted">—</span>}
+                            ) : <span className="text-app-text-mute">—</span>}
                           </td>
-                          <td className="td-actions" data-label="Actions">
+                          <td className="flex items-center gap-[0.3rem] whitespace-nowrap" data-label="Actions">
                             <button
                               className="btn-view"
                               onClick={() => setSelectedLead(lead)}
@@ -626,9 +670,9 @@ function App(): React.ReactElement {
                 {/* Pagination controls (themed) */}
                 {totalPages > 1 && (
                   <div className="pagination">
-                    <div className="pagination-left">
-                      <label className="page-size-label">Per page</label>
-                      <select className="page-size-select" value={pageSize}
+                    <div className="flex items-center gap-[0.6rem]">
+                      <label className="text-[0.75rem] text-app-text-dim font-bold">Per page</label>
+                      <select className="bg-transparent border border-app-border text-app-text py-[0.34rem] px-[0.6rem] rounded-lg font-bold" value={pageSize}
                         onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0) }}>
                         <option value={10}>10</option>
                         <option value={20}>20</option>
@@ -636,7 +680,7 @@ function App(): React.ReactElement {
                       </select>
                     </div>
 
-                    <div className="pagination-center">
+                    <div className="flex items-center gap-[0.4rem] flex-wrap">
                       <button className="page-item" disabled={currentPage === 0}
                         onClick={() => setCurrentPage(0)}>«</button>
                       <button className="page-item" disabled={currentPage === 0}
@@ -654,8 +698,8 @@ function App(): React.ReactElement {
                         onClick={() => setCurrentPage(totalPages - 1)}>»</button>
                     </div>
 
-                    <div className="pagination-right">
-                      <span className="page-info">Page {currentPage + 1} of {totalPages}</span>
+                    <div>
+                      <span className="text-[0.82rem] text-app-text-dim font-bold">Page {currentPage + 1} of {totalPages}</span>
                     </div>
                   </div>
                 )}
@@ -671,47 +715,47 @@ function App(): React.ReactElement {
         <div className="modal-overlay" onClick={() => setSelectedLead(null)}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
-            <div className="modal-header">
-              <div className="modal-title-group">
-                <span className="modal-icon">📍</span>
+            <div className="flex items-center justify-between" style={{ padding: '1.4rem 1.6rem 1.1rem', borderBottom: '1px solid rgba(30,41,59,0.6)' }}>
+              <div className="flex items-center gap-[0.85rem] min-w-0">
+                <span className="text-2xl shrink-0">📍</span>
                 <div>
-                  <h2 className="modal-title">{selectedLead.name}</h2>
-                  <span className="modal-subtitle">Lead Details</span>
+                  <h2 className="text-[1.05rem] font-extrabold text-app-text tracking-[-0.02em] leading-[1.2] whitespace-nowrap overflow-hidden text-ellipsis">{selectedLead.name}</h2>
+                  <span className="block text-[0.67rem] font-bold text-app-text-dim uppercase tracking-[0.1em] mt-[0.15rem]">Lead Details</span>
                 </div>
               </div>
               <button className="modal-close" onClick={() => setSelectedLead(null)} title="Close (Esc)">✕</button>
             </div>
 
             {/* Body */}
-            <div className="modal-body">
-              <div className="modal-field">
-                <span className="modal-field__label">📞 Phone</span>
-                <span className="modal-field__value">{selectedLead.phone || '—'}</span>
+            <div className="flex flex-col gap-[0.85rem]" style={{ padding: '1.2rem 1.6rem 1.5rem' }}>
+              <div className="flex flex-col gap-[0.3rem]">
+                <span className="text-[0.62rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em]">📞 Phone</span>
+                <span className="text-[0.9rem] text-app-text font-medium leading-[1.5] break-words">{selectedLead.phone || '—'}</span>
               </div>
-              <div className="modal-field">
-                <span className="modal-field__label">📧 Email</span>
-                <span className="modal-field__value">
+              <div className="flex flex-col gap-[0.3rem]">
+                <span className="text-[0.62rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em]">📧 Email</span>
+                <span className="text-[0.9rem] text-app-text font-medium leading-[1.5] break-words">
                   {selectedLead.email
                     ? <a href={`mailto:${selectedLead.email}`}>{selectedLead.email}</a>
                     : '—'}
                 </span>
               </div>
-              <div className="modal-field">
-                <span className="modal-field__label">📍 Address</span>
-                <span className="modal-field__value">{selectedLead.address || '—'}</span>
+              <div className="flex flex-col gap-[0.3rem]">
+                <span className="text-[0.62rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em]">📍 Address</span>
+                <span className="text-[0.9rem] text-app-text font-medium leading-[1.5] break-words">{selectedLead.address || '—'}</span>
               </div>
-              <div className="modal-field">
-                <span className="modal-field__label">🌐 Website</span>
-                <span className="modal-field__value">
+              <div className="flex flex-col gap-[0.3rem]">
+                <span className="text-[0.62rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em]">🌐 Website</span>
+                <span className="text-[0.9rem] text-app-text font-medium leading-[1.5] break-words">
                   {selectedLead.website
                     ? <a href={selectedLead.website} target="_blank" rel="noreferrer">{selectedLead.website}</a>
                     : '—'}
                 </span>
               </div>
               {selectedLead.custom_message && (
-                <div className="modal-field modal-field--ai">
-                  <span className="modal-field__label">✨ AI Message</span>
-                  <p className="modal-ai-msg">{selectedLead.custom_message}</p>
+                <div className="flex flex-col gap-[0.3rem] mt-[0.3rem] pt-4 border-t border-[rgba(30,41,59,0.55)]">
+                  <span className="text-[0.62rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em]">✨ AI Message</span>
+                  <p className="text-[0.88rem] text-purple-light leading-[1.6] bg-[rgba(167,139,250,0.06)] border border-[rgba(167,139,250,0.15)] rounded-[10px] py-3 px-4 m-0 font-medium">{selectedLead.custom_message}</p>
                 </div>
               )}
             </div>

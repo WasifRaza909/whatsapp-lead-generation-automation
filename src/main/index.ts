@@ -33,6 +33,7 @@ function createWindow(): void {
     height: 950,
     minHeight: 700,
     show: false,
+    backgroundColor: '#030912',
     autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -41,8 +42,24 @@ function createWindow(): void {
     }
   })
 
+  // Show the window only after React signals it has finished its first render.
+  // This eliminates the flash where the background appears before elements render.
+  const onAppReady = (): void => { mainWindow.show() }
+  ipcMain.once('app:ready', onAppReady)
+
+  // Fallback: show after 4 s if the renderer never sends 'app:ready'
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    setTimeout(() => {
+      if (!mainWindow.isVisible()) {
+        ipcMain.removeListener('app:ready', onAppReady)
+        mainWindow.show()
+      }
+    }, 4000)
+  })
+
+  // Clean up listener if the window closes before the signal arrives
+  mainWindow.on('closed', () => {
+    ipcMain.removeListener('app:ready', onAppReady)
   })
 
   mainWindow.webContents.setWindowOpenHandler((details: HandlerDetails) => {

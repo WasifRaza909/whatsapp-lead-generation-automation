@@ -73,7 +73,12 @@ const api = {
     const handler = (_e: Electron.IpcRendererEvent, progress: AiProgress): void => cb(progress)
     ipcRenderer.on('ai:progress', handler)
     return () => ipcRenderer.removeListener('ai:progress', handler)
-  }
+  },
+
+  // ── Window lifecycle ───────────────────────────────────────────────────────
+  // Called by the renderer after React's first render so the main process
+  // knows it's safe to show the window (prevents background-before-elements flash).
+  appReady: (): void => ipcRenderer.send('app:ready')
 }
 
 if (process.contextIsolated) {

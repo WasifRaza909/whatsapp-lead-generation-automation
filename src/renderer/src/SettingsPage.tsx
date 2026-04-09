@@ -62,23 +62,23 @@ export default function SettingsPage(): React.ReactElement {
 
       {/* ── Section: Gemini API ── */}
       <div className="settings-card">
-        <div className="settings-card__header">
-          <div className="settings-card__icon">✨</div>
+        <div className="flex items-start gap-4 mb-6">
+          <div className="text-[2rem] leading-none shrink-0 mt-[0.1rem]">✨</div>
           <div>
-            <h2 className="settings-card__title">Gemini AI Configuration</h2>
-            <p className="settings-card__sub">
+            <h2 className="text-[1.05rem] font-extrabold text-app-text tracking-[-0.02em] mb-[0.3rem]">Gemini AI Configuration</h2>
+            <p className="text-[0.82rem] text-app-text-dim leading-[1.5]">
               Powers the "Process with AI" feature to write personalised WhatsApp greetings for each lead.
             </p>
           </div>
         </div>
 
-        <div className="settings-divider" />
+        <div className="h-px bg-app-border mb-[1.4rem] opacity-50" />
 
         {/* API Key input */}
-        <label className="settings-label">Gemini API Key</label>
+        <label className="block text-[0.63rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em] mb-2">Gemini API Key</label>
         <div className="key-input-wrap">
           <input
-            className="key-input"
+            className="flex-1 bg-transparent border-none text-app-text text-[0.88rem] font-medium py-3 px-4 outline-none font-mono tracking-[0.04em]"
             type={showKey ? 'text' : 'password'}
             placeholder="AIza…"
             value={apiKey}
@@ -96,20 +96,20 @@ export default function SettingsPage(): React.ReactElement {
         </div>
 
         {/* My Service input */}
-        <label className="settings-label" style={{ marginTop: '1.2rem' }}>Your Service</label>
+        <label className="block text-[0.63rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em] mb-2" style={{ marginTop: '1.2rem' }}>Your Service</label>
         <input
-          className="key-input"
+          className="flex-1 bg-transparent border-none text-app-text text-[0.88rem] font-medium py-3 px-4 outline-none font-mono tracking-[0.04em]"
           type="text"
           placeholder="e.g. SEO, web design, social media marketing…"
           value={myService}
           onChange={(e) => { setMyService(e.target.value); setSaved(false) }}
           spellCheck={false}
         />
-        <p className="settings-hint">
-          Used in AI prompts: "We can help them with <em>{myService || 'your service'}</em>."
+        <p className="text-[0.75rem] text-app-text-dim mt-[0.45rem] mb-[1.2rem] leading-[1.5]">
+          Used in AI prompts: "We can help them with <em className="text-purple not-italic font-semibold">{myService || 'your service'}</em>."
         </p>
 
-        <div className="settings-actions">
+        <div className="flex items-center gap-3 flex-wrap mb-[0.9rem]">
           <button className="btn-primary" onClick={handleSave} disabled={!apiKey.trim()}>
             💾 Save Key
           </button>
@@ -125,25 +125,25 @@ export default function SettingsPage(): React.ReactElement {
 
         {/* Feedback messages */}
         {saved && (
-          <div className="settings-feedback settings-feedback--ok">
+          <div className="flex items-center gap-2 py-[0.65rem] px-4 rounded-lg text-[0.83rem] font-semibold animate-fade-soft bg-[rgba(52,211,153,0.1)] text-green border border-[rgba(52,211,153,0.2)]">
             ✓ API key saved to local storage.
           </div>
         )}
         {validateState !== 'idle' && validateState !== 'loading' && (
-          <div className={`settings-feedback settings-feedback--${validateState}`}>
+          <div className={`flex items-center gap-2 py-[0.65rem] px-4 rounded-lg text-[0.83rem] font-semibold animate-fade-soft ${validateState === 'ok' ? 'bg-[rgba(52,211,153,0.1)] text-green border border-[rgba(52,211,153,0.2)]' : 'bg-[rgba(248,113,113,0.1)] text-red border border-[rgba(248,113,113,0.2)]'}`}>
             {validateMsg}
           </div>
         )}
         {validateState === 'loading' && (
-          <div className="settings-feedback settings-feedback--loading">
+          <div className="flex items-center gap-2 py-[0.65rem] px-4 rounded-lg text-[0.83rem] font-semibold animate-fade-soft bg-[rgba(167,139,250,0.08)] text-purple-light border border-[rgba(167,139,250,0.18)]">
             <span className="settings-spinner" /> {validateMsg}
           </div>
         )}
       </div>
 
       {/* ── Section: Info ── */}
-      <div className="settings-card settings-card--dim">
-        <h3 className="settings-info-title">ℹ How it works</h3>
+      <div className="settings-card bg-[rgba(9,18,33,0.4)] border-[rgba(30,41,59,0.5)]">
+        <h3 className="text-[0.78rem] font-extrabold text-app-text-dim uppercase tracking-[0.1em] mb-4">ℹ How it works</h3>
         <ul className="settings-info-list">
           <li>
             <strong>Model:</strong> <code>gemini-2.5-flash</code> — Google's best price-performance free-tier model.
