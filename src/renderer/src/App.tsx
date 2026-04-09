@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import SettingsPage from './SettingsPage'
 
 interface Lead {
@@ -57,6 +58,10 @@ function App(): React.ReactElement {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [aiError, setAiError] = useState<string | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [pageSizeDropdownOpen, setPageSizeDropdownOpen] = useState(false)
+  const pageSizeBtnRef = useRef<HTMLButtonElement>(null)
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; openUp: boolean }>({ top: 0, left: 0, openUp: false })
 
   // Close modal on Escape
   // Signal main process that React has rendered — window is shown only after this,
@@ -71,6 +76,27 @@ function App(): React.ReactElement {
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [selectedLead])
+
+  useEffect(() => {
+    if (!pageSizeDropdownOpen) return
+    const handler = (e: KeyboardEvent): void => { if (e.key === 'Escape') setPageSizeDropdownOpen(false) }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [pageSizeDropdownOpen])
+
+  // Close page size dropdown when clicking outside
+  useEffect(() => {
+    if (!pageSizeDropdownOpen) return
+    const handler = (e: MouseEvent): void => {
+      const target = e.target as Node
+      // Close if click is not on the trigger button and not inside dropdown portal
+      if (!pageSizeBtnRef.current?.contains(target) && !(target as Element).closest?.('.dropdown-menu')) {
+        setPageSizeDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [pageSizeDropdownOpen])
 
   useEffect(() => {
     window.api.getLeads().then(setLeads).catch(console.error)
@@ -254,6 +280,15 @@ function App(): React.ReactElement {
     setLeads(updated)
   }
 
+  const handleExport = async (): Promise<void> => {
+    setExporting(true)
+    try {
+      await window.api.exportCsv()
+    } finally {
+      setExporting(false)
+    }
+  }
+
   // Sorting handler: toggle direction when clicking same column
   const handleSort = (col: keyof Lead): void => {
     setCurrentPage(0)
@@ -312,7 +347,7 @@ function App(): React.ReactElement {
   })()
 
   return (
-    <div className="container max-w-[1220px] mx-auto px-8 py-10 relative z-[1]">
+    <div className="container max-w-[1440px] mx-auto px-4 sm:px-8 py-6 sm:py-10 relative z-[1]">
 
       {/* ── Header ── */}
       <header className="mb-10">
@@ -460,6 +495,14 @@ function App(): React.ReactElement {
                   🗑 Clear DataBase
                 </button>
               )}
+              <button
+                className="btn-primary ml-auto"
+                onClick={handleExport}
+                disabled={exporting || leads.length === 0}
+                title={leads.length === 0 ? 'No leads to export' : 'Export all leads to Excel CSV'}
+              >
+                {exporting ? '⏳ Exporting…' : '📊 Export CSV'}
+              </button>
             </div>
             {/* Status line (only shown when not actively scraping) */}
             {!isRunning && status && (
@@ -552,7 +595,7 @@ function App(): React.ReactElement {
                 </div>
               )}
 
-              <div className="bg-app-surface border border-[rgba(30,41,59,0.75)] rounded-2xl overflow-hidden backdrop-blur-[16px]">
+              <div className="table-outer">
                 <table>
                   <thead>
                     <tr>
@@ -562,6 +605,7 @@ function App(): React.ReactElement {
                           <span className={`sort-indicator ${sortBy === 'id' ? sortDir : ''}`} />
                         </button>
                       </th>
+                      <th></th>
                       <th aria-sort={sortBy === 'name' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
                         <button className={`th-btn${sortBy === 'name' ? ' active' : ''}`} onClick={() => handleSort('name')}>
                           <span className="uppercase tracking-[0.12em]">Business Name</span>
@@ -608,8 +652,17 @@ function App(): React.ReactElement {
                       return (
                         <tr key={uniqueKey} className={newLeadIds.has(key) ? 'row-new' : ''}>
                           <td className="text-app-text-mute w-12 text-right font-bold text-[0.74rem] tabular-nums" data-label="#">{lead.id ?? '—'}</td>
-                          <td className="text-app-text font-semibold" data-label="Business Name">{lead.name}</td>
-                          <td className="text-cyan font-mono text-[0.8rem] font-medium" data-label="Phone">{lead.phone || <span className="text-app-text-mute">—</span>}</td>
+                          <td className="flex items-center justify-center" data-label="Detail">
+                            <button
+                              className="btn-view"
+                              onClick={() => setSelectedLead(lead)}
+                              title="View full details"
+                            >
+                              👁
+                            </button>
+                          </td>
+                          <td className="text-app-text font-semibold max-w-[140px] md:max-w-[200px] lg:max-w-[360px] min-w-0 truncate" data-label="Business Name" title={lead.name}>{lead.name}</td>
+                          <td className="text-cyan font-mono text-[0.8rem] font-medium min-w-[120px] whitespace-nowrap text-right" data-label="Phone">{lead.phone || <span className="text-app-text-mute">—</span>}</td>
                           <td className="max-w-[180px] whitespace-nowrap overflow-hidden text-ellipsis text-[0.8rem]" data-label="Email">
                             {lead.email ? (
                               <a href={`mailto:${lead.email}`}>{lead.email}</a>
@@ -642,13 +695,6 @@ function App(): React.ReactElement {
                             ) : <span className="text-app-text-mute">—</span>}
                           </td>
                           <td className="flex items-center gap-[0.3rem] whitespace-nowrap" data-label="Actions">
-                            <button
-                              className="btn-view"
-                              onClick={() => setSelectedLead(lead)}
-                              title="View full details"
-                            >
-                              👁
-                            </button>
                             {!generatingIds.has(lead.id!) && aiState !== 'running' && (
                               <button
                                 className={`btn-gen-one${lead.custom_message ? ' btn-regen' : ''}`}
@@ -668,18 +714,54 @@ function App(): React.ReactElement {
                 </table>
 
                 {/* Pagination controls (themed) */}
-                {totalPages > 1 && (
-                  <div className="pagination">
-                    <div className="flex items-center gap-[0.6rem]">
-                      <label className="text-[0.75rem] text-app-text-dim font-bold">Per page</label>
-                      <select className="bg-transparent border border-app-border text-app-text py-[0.34rem] px-[0.6rem] rounded-lg font-bold" value={pageSize}
-                        onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0) }}>
-                        <option value={10}>10</option>
-                        <option value={20}>20</option>
-                        <option value={50}>50</option>
-                      </select>
-                    </div>
+                <div className="pagination">
+                  <div className="flex items-center gap-[0.6rem]">
+                    <label className="text-[0.75rem] text-app-text-dim font-bold">Per page</label>
+                    <button
+                      ref={pageSizeBtnRef}
+                      className="select-theme"
+                      onClick={() => {
+                        if (!pageSizeDropdownOpen && pageSizeBtnRef.current) {
+                          const rect = pageSizeBtnRef.current.getBoundingClientRect()
+                          const DROPDOWN_H = 120 // approx height of 3 items
+                          const spaceBelow = window.innerHeight - rect.bottom
+                          const openUp = spaceBelow < DROPDOWN_H + 8
+                          setDropdownPos({
+                            top: openUp ? rect.top - DROPDOWN_H - 6 : rect.bottom + 6,
+                            left: rect.left,
+                            openUp
+                          })
+                        }
+                        setPageSizeDropdownOpen(!pageSizeDropdownOpen)
+                      }}
+                      title="Items per page"
+                    >
+                      {pageSize} ▾
+                    </button>
+                    {pageSizeDropdownOpen && createPortal(
+                      <div
+                        className="dropdown-menu animate-fade-in"
+                        style={{ top: dropdownPos.top, left: dropdownPos.left }}
+                      >
+                        {[10, 20, 50].map((size) => (
+                          <button
+                            key={size}
+                            className={`dropdown-item${pageSize === size ? ' active' : ''}`}
+                            onClick={() => {
+                              setPageSize(size)
+                              setCurrentPage(0)
+                              setPageSizeDropdownOpen(false)
+                            }}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>,
+                      document.body
+                    )}
+                  </div>
 
+                  {totalPages > 1 && (
                     <div className="flex items-center gap-[0.4rem] flex-wrap">
                       <button className="page-item" disabled={currentPage === 0}
                         onClick={() => setCurrentPage(0)}>«</button>
@@ -697,12 +779,14 @@ function App(): React.ReactElement {
                       <button className="page-item" disabled={currentPage >= totalPages - 1}
                         onClick={() => setCurrentPage(totalPages - 1)}>»</button>
                     </div>
+                  )}
 
-                    <div>
-                      <span className="text-[0.82rem] text-app-text-dim font-bold">Page {currentPage + 1} of {totalPages}</span>
-                    </div>
+                  <div>
+                    <span className="text-[0.82rem] text-app-text-dim font-bold">
+                      {totalPages > 1 ? `Page ${currentPage + 1} of ${totalPages}` : `${leads.length} lead${leads.length !== 1 ? 's' : ''}`}
+                    </span>
                   </div>
-                )}
+                </div>
 
               </div>
             </section>

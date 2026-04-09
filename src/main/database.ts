@@ -87,4 +87,6 @@ export function updateLeadCustomMessage(id: number, message: string): void {
 
 export function deleteAllLeads(): void {
   db.prepare('DELETE FROM leads').run()
+  // Reset auto-increment counter for the leads table
+  db.prepare("DELETE FROM sqlite_sequence WHERE name='leads'").run()
 }

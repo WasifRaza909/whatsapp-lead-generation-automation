@@ -75,6 +75,10 @@ const api = {
     return () => ipcRenderer.removeListener('ai:progress', handler)
   },
 
+  // ── Export ────────────────────────────────────────────────────────────────
+  exportCsv: (): Promise<{ exported: number; filePath?: string }> =>
+    ipcRenderer.invoke('db:exportCsv'),
+
   // ── Window lifecycle ───────────────────────────────────────────────────────
   // Called by the renderer after React's first render so the main process
   // knows it's safe to show the window (prevents background-before-elements flash).

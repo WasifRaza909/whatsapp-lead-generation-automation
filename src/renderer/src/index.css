@@ -33,6 +33,10 @@
   50%  { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
 }
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 /* ── Body background & ambient blobs (pseudo-elements — can't be Tailwind) ── */
 body {
@@ -363,6 +367,15 @@ button:disabled {
   }
 }
 
+/* ── Table outer wrapper ────────────────────────────────────────────────── */
+@layer components {
+  .table-outer {
+    @apply bg-app-surface border border-[rgba(30,41,59,0.75)] rounded-2xl overflow-x-auto;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+}
+
 /* ── Table ──────────────────────────────────────────────────────────────── */
 table { @apply w-full text-[0.83rem]; border-collapse: collapse; }
 thead { @apply sticky top-0 z-[2]; }
@@ -579,6 +592,41 @@ label {
     box-shadow: 0 8px 30px rgba(34,211,238,0.08);
   }
   .page-item:disabled { @apply opacity-25 cursor-not-allowed; transform: none; }
+}
+
+/* ── Themed select/dropdown button ──────────────────────────────────────── */
+@layer components {
+  .select-theme {
+    @apply font-sans bg-black/40 border border-app-border rounded-[10px] text-app-text text-sm font-medium py-[0.65rem] px-3 outline-none transition-all duration-[200ms] cursor-pointer;
+  }
+  .select-theme:hover:not(:disabled) { 
+    @apply bg-black/[0.5] border-[rgba(34,211,238,0.3)];
+    box-shadow: 0 0 16px rgba(34,211,238,0.08);
+  }
+  .select-theme:focus:not(:disabled) { 
+    @apply border-[rgba(34,211,238,0.45)];
+    box-shadow: 0 0 0 3px rgba(34,211,238,0.1), 0 0 12px rgba(34,211,238,0.12);
+  }
+  .select-theme:disabled { @apply opacity-40 cursor-not-allowed; }
+
+  .dropdown-menu {
+    @apply fixed w-16 bg-[rgba(9,18,33,0.96)] border border-[rgba(34,211,238,0.18)] rounded-[10px] overflow-hidden z-[200];
+    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,211,238,0.06);
+    backdrop-filter: blur(20px);
+  }
+  .dropdown-item {
+    @apply block w-full text-center py-2 px-3 border-none bg-transparent text-app-text text-sm font-medium cursor-pointer transition-all duration-150;
+  }
+  .dropdown-item:hover:not(.active) { @apply bg-[rgba(34,211,238,0.08)] text-cyan; }
+  .dropdown-item.active {
+    @apply bg-[rgba(34,211,238,0.15)] text-cyan font-bold;
+    box-shadow: inset 0 0 0 1px rgba(34,211,238,0.3);
+  }
+  .dropdown-item:not(:last-child) { @apply border-b border-[rgba(30,41,59,0.6)]; }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────────────────── */

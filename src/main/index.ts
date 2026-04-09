@@ -1,5 +1,6 @@
-import { app, shell, BrowserWindow, ipcMain, IpcMainInvokeEvent, HandlerDetails } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, IpcMainInvokeEvent, HandlerDetails, dialog } from 'electron'
 import { join } from 'path'
+import { writeFileSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import {
   initDatabase,
@@ -195,6 +196,31 @@ app.whenReady().then(() => {
   // IPC: abort AI processing
   ipcMain.handle('ai:stop', async () => {
     aiAbortFlag = true
+  })
+
+  // IPC: export all leads to a CSV file (opens native Save dialog)
+  ipcMain.handle('db:exportCsv', async () => {
+    const leads = getLeads()
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      title: 'Export Leads',
+      defaultPath: 'leads.csv',
+      filters: [{ name: 'CSV (Excel)', extensions: ['csv'] }]
+    })
+    if (canceled || !filePath) return { exported: 0 }
+
+    const escape = (v: unknown): string => {
+      const s = v == null ? '' : String(v)
+      return '"' + s.replace(/"/g, '""') + '"'
+    }
+    const header = ['ID', 'Business Name', 'Phone', 'Email', 'Address', 'Website', 'AI Message']
+    const rows = leads.map((l) => [
+      escape(l.id), escape(l.name), escape(l.phone), escape(l.email),
+      escape(l.address), escape(l.website), escape(l.custom_message)
+    ])
+    const csv = [header.join(','), ...rows.map((r) => r.join(','))].join('\r\n')
+    // UTF-8 BOM so Excel opens it correctly
+    writeFileSync(filePath, '\uFEFF' + csv, 'utf8')
+    return { exported: leads.length, filePath }
   })
 
   // IPC: generate AI message for a single lead by id

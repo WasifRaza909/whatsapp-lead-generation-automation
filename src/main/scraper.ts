@@ -116,7 +116,7 @@ export async function scrapeGoogleMaps(
 
     const url = `https://www.google.com/maps/search/${encodeURIComponent(query)}`
     emitStatus(win, `Searching: "${query}"`)
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 })
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 })
 
     // Dismiss cookie/consent dialogs if present
     await page
@@ -133,7 +133,7 @@ export async function scrapeGoogleMaps(
 
     // Wait for the results panel
     const PANEL_SEL = 'div[role="feed"]'
-    await page.waitForSelector(PANEL_SEL, { timeout: 20000 })
+    await page.waitForSelector(PANEL_SEL, { timeout: 30000 })
 
     const seen = new Set<string>()
     let totalFound = 0
