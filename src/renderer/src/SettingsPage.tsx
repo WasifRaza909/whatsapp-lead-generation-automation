@@ -17,7 +17,7 @@ export default function SettingsPage(): React.ReactElement {
   useEffect(() => {
     const stored = localStorage.getItem(LS_KEY) ?? ''
     setApiKey(stored)
-    setMyService(localStorage.getItem(LS_SERVICE_KEY) ?? '')
+    setMyService(localStorage.getItem(LS_SERVICE_KEY) ?? 'Social Media Marketing')
   }, [])
 
   const handleSave = (): void => {
@@ -110,8 +110,8 @@ export default function SettingsPage(): React.ReactElement {
         </p>
 
         <div className="flex items-center gap-3 flex-wrap mb-[0.9rem]">
-          <button className="btn-primary" onClick={handleSave} disabled={!apiKey.trim()}>
-            💾 Save Key
+          <button className="btn-primary" onClick={handleSave}>
+            💾 Save Settings
           </button>
           <button className="btn-settings-validate" onClick={handleValidate} disabled={validateState === 'loading'}>
             {validateState === 'loading' ? '⏳ Testing…' : '🔌 Test Connection'}
@@ -126,7 +126,7 @@ export default function SettingsPage(): React.ReactElement {
         {/* Feedback messages */}
         {saved && (
           <div className="flex items-center gap-2 py-[0.65rem] px-4 rounded-lg text-[0.83rem] font-semibold animate-fade-soft bg-[rgba(52,211,153,0.1)] text-green border border-[rgba(52,211,153,0.2)]">
-            ✓ API key saved to local storage.
+            ✓ Settings saved.
           </div>
         )}
         {validateState !== 'idle' && validateState !== 'loading' && (

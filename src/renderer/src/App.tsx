@@ -723,7 +723,7 @@ function App(): React.ReactElement {
                       onClick={() => {
                         if (!pageSizeDropdownOpen && pageSizeBtnRef.current) {
                           const rect = pageSizeBtnRef.current.getBoundingClientRect()
-                          const DROPDOWN_H = 120 // approx height of 3 items
+                          const DROPDOWN_H = 120
                           const spaceBelow = window.innerHeight - rect.bottom
                           const openUp = spaceBelow < DROPDOWN_H + 8
                           setDropdownPos({
