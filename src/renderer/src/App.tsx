@@ -222,7 +222,7 @@ function App(): React.ReactElement {
 
   const handleTestDB = async (): Promise<void> => {
     const dummy: Omit<Lead, 'id'> = {
-      name: 'Test Business', phone: '+92 3422 148283',
+      name: 'Test Business', phone: '+92 331 3780919',
       address: '123 Main St, New York, NY 10001',
       website: 'https://example.com', email: 'hello@example.com', custom_message: '',
       send_status: 'none'
