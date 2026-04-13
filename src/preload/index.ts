@@ -9,6 +9,7 @@ export interface Lead {
   website: string
   email: string
   custom_message: string
+  send_status: 'none' | 'sent_auto' | 'opened_manual' | 'failed'
 }
 
 export interface ScrapeOptions {
@@ -25,6 +26,14 @@ export interface AiProgress {
   message?: string
   status: 'processing' | 'done' | 'error'
   error?: string
+}
+
+export interface WaSendProgress {
+  total: number
+  current: number
+  leadId: number
+  status: 'sending' | 'done' | 'failed' | 'waiting'
+  nextDelay?: number
 }
 
 // Typed API exposed to the renderer via contextBridge
@@ -78,6 +87,47 @@ const api = {
   // ── Export ────────────────────────────────────────────────────────────────
   exportCsv: (): Promise<{ exported: number; filePath?: string }> =>
     ipcRenderer.invoke('db:exportCsv'),
+
+  // ── WhatsApp ──────────────────────────────────────────────────────────────
+  openWhatsApp: (phone: string, message: string): Promise<void> =>
+    ipcRenderer.invoke('whatsapp:open', { phone, message }),
+
+  // ── WhatsApp Automated (whatsapp-web.js) ──────────────────────────────────
+  waInit: (): Promise<void> =>
+    ipcRenderer.invoke('wa:init'),
+
+  waGetStatus: (): Promise<string> =>
+    ipcRenderer.invoke('wa:getStatus'),
+
+  waSendBatch: (): Promise<{ sent: number; failed: number }> =>
+    ipcRenderer.invoke('wa:sendBatch'),
+
+  waAbort: (): Promise<void> =>
+    ipcRenderer.invoke('wa:abort'),
+
+  waDisconnect: (): Promise<void> =>
+    ipcRenderer.invoke('wa:disconnect'),
+
+  waManualSend: (payload: { leadId: number; phone: string; message: string }): Promise<void> =>
+    ipcRenderer.invoke('wa:manualSend', payload),
+
+  onWaStatus: (cb: (data: { status: string; detail?: string }) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, data: { status: string; detail?: string }): void => cb(data)
+    ipcRenderer.on('wa:status', handler)
+    return () => ipcRenderer.removeListener('wa:status', handler)
+  },
+
+  onWaQr: (cb: (qr: string) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, qr: string): void => cb(qr)
+    ipcRenderer.on('wa:qr', handler)
+    return () => ipcRenderer.removeListener('wa:qr', handler)
+  },
+
+  onWaSendProgress: (cb: (progress: WaSendProgress) => void): (() => void) => {
+    const handler = (_e: Electron.IpcRendererEvent, progress: WaSendProgress): void => cb(progress)
+    ipcRenderer.on('wa:send-progress', handler)
+    return () => ipcRenderer.removeListener('wa:send-progress', handler)
+  },
 
   // ── Window lifecycle ───────────────────────────────────────────────────────
   // Called by the renderer after React's first render so the main process

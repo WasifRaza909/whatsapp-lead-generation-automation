@@ -10,10 +10,20 @@ import {
   deleteAllLeads,
   getLeadsWithoutCustomMessage,
   updateLeadCustomMessage,
+  updateLeadSendStatus,
+  getLeadsReadyToSend,
   type Lead
 } from './database'
 import { scrapeGoogleMaps, stopScrape, type ScrapeOptions } from './scraper'
 import { generatePersonalizedMessage, validateApiKey } from './gemini'
+import {
+  initWhatsApp,
+  sendBatch,
+  abortSending,
+  disconnectWhatsApp,
+  getWhatsAppStatus,
+  type SendQueueItem
+} from './whatsapp'
 
 let aiAbortFlag = false
 
@@ -240,6 +250,69 @@ app.whenReady().then(() => {
       })
       updateLeadCustomMessage(lead.id!, message)
       return { leadId, message }
+    }
+  )
+
+  // IPC: open WhatsApp with a pre-filled message via wa.me deep link
+  // Also marks the lead as 'opened_manual' in the database
+  ipcMain.handle(
+    'whatsapp:open',
+    async (_event: IpcMainInvokeEvent, payload: { phone: string; message: string; leadId?: number }) => {
+      const { phone, message, leadId } = payload
+      // Strip everything except digits from the phone number
+      const cleaned = phone.replace(/[^\d]/g, '')
+      if (!cleaned) throw new Error('Invalid phone number')
+      const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`
+      await shell.openExternal(url)
+      if (leadId) {
+        updateLeadSendStatus(leadId, 'opened_manual')
+      }
+    }
+  )
+
+  // ── WhatsApp Web.js (Automated Mode) ────────────────────────────────────
+
+  // IPC: initialise whatsapp-web.js client (triggers QR if needed)
+  ipcMain.handle('wa:init', async () => {
+    await initWhatsApp()
+  })
+
+  // IPC: get current WhatsApp client status
+  ipcMain.handle('wa:getStatus', () => {
+    return getWhatsAppStatus()
+  })
+
+  // IPC: start automated batch sending
+  ipcMain.handle('wa:sendBatch', async () => {
+    const queue: SendQueueItem[] = getLeadsReadyToSend().map((l) => ({
+      leadId: l.id!,
+      phone: l.phone,
+      message: l.custom_message
+    }))
+    if (queue.length === 0) return { sent: 0, failed: 0 }
+    return await sendBatch(queue, (id, status) => updateLeadSendStatus(id, status))
+  })
+
+  // IPC: abort automated sending
+  ipcMain.handle('wa:abort', () => {
+    abortSending()
+  })
+
+  // IPC: disconnect whatsapp-web.js client
+  ipcMain.handle('wa:disconnect', async () => {
+    await disconnectWhatsApp()
+  })
+
+  // IPC: manual send single lead via wa.me (marks as opened_manual)
+  ipcMain.handle(
+    'wa:manualSend',
+    async (_event: IpcMainInvokeEvent, payload: { leadId: number; phone: string; message: string }) => {
+      const { leadId, phone, message } = payload
+      const cleaned = phone.replace(/[^\d]/g, '')
+      if (!cleaned) throw new Error('Invalid phone number')
+      const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`
+      await shell.openExternal(url)
+      updateLeadSendStatus(leadId, 'opened_manual')
     }
   )
 

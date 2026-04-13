@@ -10,6 +10,7 @@ export interface Lead {
   website: string
   email: string
   custom_message: string
+  send_status: 'none' | 'sent_auto' | 'opened_manual' | 'failed'
 }
 
 let db: Database.Database
@@ -34,6 +35,7 @@ export function initDatabase(): void {
   try { db.exec(`ALTER TABLE leads ADD COLUMN custom_message TEXT`) } catch { /* already exists */ }
   try { db.exec(`UPDATE leads SET custom_message = ai_message WHERE custom_message IS NULL AND ai_message IS NOT NULL`) } catch { /* ai_message column may not exist */ }
   try { db.exec(`ALTER TABLE leads ADD COLUMN email TEXT DEFAULT ''`) } catch { /* already exists */ }
+  try { db.exec(`ALTER TABLE leads ADD COLUMN send_status TEXT DEFAULT 'none'`) } catch { /* already exists */ }
 }
 
 export function saveLead(lead: Omit<Lead, 'id'>): Lead {
@@ -83,6 +85,16 @@ export function getLeadsWithoutCustomMessage(): Lead[] {
 
 export function updateLeadCustomMessage(id: number, message: string): void {
   db.prepare('UPDATE leads SET custom_message = ? WHERE id = ?').run(message, id)
+}
+
+export function updateLeadSendStatus(id: number, status: Lead['send_status']): void {
+  db.prepare('UPDATE leads SET send_status = ? WHERE id = ?').run(status, id)
+}
+
+export function getLeadsReadyToSend(): Lead[] {
+  return db
+    .prepare("SELECT * FROM leads WHERE phone != '' AND custom_message != '' AND custom_message IS NOT NULL AND send_status != 'sent_auto' ORDER BY id ASC")
+    .all() as Lead[]
 }
 
 export function deleteAllLeads(): void {

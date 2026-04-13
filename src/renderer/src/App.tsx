@@ -10,6 +10,7 @@ interface Lead {
   website: string
   email: string
   custom_message: string
+  send_status: 'none' | 'sent_auto' | 'opened_manual' | 'failed'
 }
 
 interface AiProgress {
@@ -62,6 +63,22 @@ function App(): React.ReactElement {
   const [pageSizeDropdownOpen, setPageSizeDropdownOpen] = useState(false)
   const pageSizeBtnRef = useRef<HTMLButtonElement>(null)
   const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; openUp: boolean }>({ top: 0, left: 0, openUp: false })
+
+  // ── Sender ──────────────────────────────────────────────────────────────────
+  const [senderOpen, setSenderOpen] = useState(false)
+  const [sendMode, setSendMode] = useState<'auto' | 'manual'>('manual')
+  const [waStatus, setWaStatus] = useState<'disconnected' | 'qr' | 'loading' | 'ready' | 'sending' | 'error'>('disconnected')
+  const [waDetail, setWaDetail] = useState('')
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null)
+  const [campaignState, setCampaignState] = useState<'idle' | 'connecting' | 'ready' | 'sending' | 'done' | 'error'>('idle')
+  const [sendProgress, setSendProgress] = useState({ current: 0, total: 0 })
+  const [currentSendLeadId, setCurrentSendLeadId] = useState<number | null>(null)
+  const [waitingDelay, setWaitingDelay] = useState<number | null>(null)
+  const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null)
+  const [sendError, setSendError] = useState<string | null>(null)
+  const [sessionSendResults, setSessionSendResults] = useState<Map<number, 'sent_auto' | 'opened_manual' | 'failed'>>(new Map())
+  const [showQrModal, setShowQrModal] = useState(false)
+  const waUnsubRef = useRef<Array<() => void>>([])
 
   // Close modal on Escape
   // Signal main process that React has rendered — window is shown only after this,
@@ -128,6 +145,7 @@ function App(): React.ReactElement {
     return () => {
       unsubRef.current.forEach((fn) => fn())
       aiUnsubRef.current?.()
+      waUnsubRef.current.forEach((fn) => fn())
     }
   }, [])
 
@@ -204,9 +222,10 @@ function App(): React.ReactElement {
 
   const handleTestDB = async (): Promise<void> => {
     const dummy: Omit<Lead, 'id'> = {
-      name: 'Test Business', phone: '+1 234 567 8900',
+      name: 'Test Business', phone: '+92 332 2489190',
       address: '123 Main St, New York, NY 10001',
-      website: 'https://example.com', email: 'hello@example.com', custom_message: ''
+      website: 'https://example.com', email: 'hello@example.com', custom_message: '',
+      send_status: 'none'
     }
     const saved = await window.api.saveLead(dummy)
     setLeads((prev) => [saved, ...prev])
@@ -298,6 +317,104 @@ function App(): React.ReactElement {
       setSortBy(col)
       setSortDir('asc')
     }
+  }
+
+  // ── Sender handlers ─────────────────────────────────────────────────────
+  const readyToSendLeads = useMemo(
+    () => leads.filter((l) => l.phone && l.custom_message && l.send_status !== 'sent_auto'),
+    [leads]
+  )
+
+  const sendPercent = sendProgress.total > 0 ? Math.round((sendProgress.current / sendProgress.total) * 100) : 0
+
+  const getLeadSendStatus = (lead: Lead): { label: string; cls: string } => {
+    const ss = lead.id ? sessionSendResults.get(lead.id) : undefined
+    const s = ss || lead.send_status
+    switch (s) {
+      case 'sent_auto': return { label: 'Sent', cls: 'status-sent' }
+      case 'opened_manual': return { label: 'Opened', cls: 'status-opened' }
+      case 'failed': return { label: 'Failed', cls: 'status-failed' }
+      default: return { label: 'Pending', cls: 'status-pending' }
+    }
+  }
+
+  const handleWaConnect = async (): Promise<void> => {
+    setCampaignState('connecting')
+    setSendError(null)
+    setQrDataUrl(null)
+    waUnsubRef.current.forEach((fn) => fn())
+    waUnsubRef.current = []
+
+    const unsubStatus = window.api.onWaStatus((data) => {
+      setWaStatus(data.status as typeof waStatus)
+      setWaDetail(data.detail || '')
+      if (data.status === 'ready') { setCampaignState('ready'); setQrDataUrl(null); setShowQrModal(false) }
+      if (data.status === 'error') { setCampaignState('error'); setSendError(data.detail || 'Connection failed') }
+      if (data.status === 'disconnected') { setCampaignState('idle') }
+    })
+
+    const unsubQr = window.api.onWaQr((dataUrl) => {
+      setQrDataUrl(dataUrl)
+      setShowQrModal(true)
+      setCampaignState('connecting')
+    })
+
+    waUnsubRef.current = [unsubStatus, unsubQr]
+    try { await window.api.waInit() }
+    catch (err) { setSendError(String(err)); setCampaignState('error') }
+  }
+
+  const handleStartCampaign = async (): Promise<void> => {
+    setCampaignState('sending')
+    setSendResult(null)
+    setSendError(null)
+    setSessionSendResults(new Map())
+    setSendProgress({ current: 0, total: readyToSendLeads.length })
+
+    const unsub = window.api.onWaSendProgress((p) => {
+      setSendProgress({ current: p.current, total: p.total })
+      setCurrentSendLeadId(p.leadId)
+      setWaitingDelay(p.status === 'waiting' ? (p.nextDelay ?? null) : null)
+      if (p.status === 'done') setSessionSendResults((prev) => new Map(prev).set(p.leadId, 'sent_auto'))
+      else if (p.status === 'failed') setSessionSendResults((prev) => new Map(prev).set(p.leadId, 'failed'))
+    })
+    waUnsubRef.current.push(unsub)
+
+    try {
+      const res = await window.api.waSendBatch()
+      setSendResult(res)
+      setCampaignState('done')
+      setWaitingDelay(null)
+      setCurrentSendLeadId(null)
+      const updated = await window.api.getLeads()
+      setLeads(updated)
+    } catch (err) { setSendError(String(err)); setCampaignState('error') }
+  }
+
+  const handleStopCampaign = async (): Promise<void> => {
+    await window.api.waAbort()
+    setCampaignState('ready')
+    setWaitingDelay(null)
+    setCurrentSendLeadId(null)
+    const updated = await window.api.getLeads()
+    setLeads(updated)
+  }
+
+  const handleWaDisconnect = async (): Promise<void> => {
+    await window.api.waDisconnect()
+    setCampaignState('idle')
+    setWaStatus('disconnected')
+    setQrDataUrl(null)
+  }
+
+  const handleManualSend = async (lead: Lead): Promise<void> => {
+    if (!lead.id || !lead.phone || !lead.custom_message) return
+    try {
+      await window.api.waManualSend({ leadId: lead.id, phone: lead.phone, message: lead.custom_message })
+      setSessionSendResults((prev) => new Map(prev).set(lead.id!, 'opened_manual'))
+      const updated = await window.api.getLeads()
+      setLeads(updated)
+    } catch (err) { setSendError(String(err)) }
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -572,6 +689,141 @@ function App(): React.ReactElement {
                 </div>
               </div>
 
+              {/* ── Sender Panel Toggle + Collapsible ── */}
+              <div className="mb-[0.9rem]">
+                <button
+                  className={`btn-sender-toggle${senderOpen ? ' btn-sender-toggle--active' : ''}`}
+                  onClick={() => setSenderOpen((p) => !p)}
+                >
+                  <span className={`wa-status-dot wa-status-dot--${waStatus}`} style={{ width: 8, height: 8 }} />
+                  📡 Smart Sender
+                  {readyToSendLeads.length > 0 && (
+                    <span className="inline-flex items-center justify-center bg-[rgba(37,211,102,0.2)] text-[#25d366] text-[0.63rem] font-extrabold min-w-[18px] h-[18px] rounded-full px-[0.35rem]">{readyToSendLeads.length}</span>
+                  )}
+                  <span className={`sender-toggle-chevron${senderOpen ? ' open' : ''}`}>▾</span>
+                </button>
+
+                {senderOpen && (
+                  <div className="sender-panel">
+                    {/* Row 1: Mode pills + Status + Actions */}
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {/* Mode pills */}
+                      <div className="sender-mode-pills">
+                        <button
+                          className={`sender-pill${sendMode === 'manual' ? ' sender-pill--active-manual' : ''}`}
+                          onClick={() => setSendMode('manual')}
+                        >
+                          🛡 Manual
+                        </button>
+                        <button
+                          className={`sender-pill${sendMode === 'auto' ? ' sender-pill--active-auto' : ''}`}
+                          onClick={() => setSendMode('auto')}
+                        >
+                          🤖 Auto
+                        </button>
+                      </div>
+
+                      {/* Status indicator (auto mode) */}
+                      {sendMode === 'auto' && (
+                        <div className="flex items-center gap-2">
+                          <span className={`wa-status-dot wa-status-dot--${waStatus}`} />
+                          <span className="text-[0.78rem] font-semibold text-app-text-dim">
+                            {waStatus === 'disconnected' && 'Not connected'}
+                            {waStatus === 'qr' && 'Scan QR…'}
+                            {waStatus === 'loading' && (waDetail || 'Loading…')}
+                            {waStatus === 'ready' && 'Connected'}
+                            {waStatus === 'sending' && 'Sending…'}
+                            {waStatus === 'error' && 'Error'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 ml-auto">
+                        {sendMode === 'auto' && waStatus === 'disconnected' && (
+                          <button className="btn-wa-connect" onClick={handleWaConnect} disabled={campaignState === 'connecting'}>
+                            {campaignState === 'connecting' ? '⏳ Connecting…' : '🔌 Connect'}
+                          </button>
+                        )}
+                        {sendMode === 'auto' && (waStatus === 'ready' || waStatus === 'sending') && campaignState !== 'sending' && (
+                          <>
+                            <button
+                              className="btn-wa-start"
+                              onClick={handleStartCampaign}
+                              disabled={readyToSendLeads.length === 0}
+                              title={readyToSendLeads.length === 0 ? 'No leads ready' : `Send to ${readyToSendLeads.length} leads`}
+                            >
+                              🚀 Send All ({readyToSendLeads.length})
+                            </button>
+                            <button className="btn-ghost" onClick={handleWaDisconnect} title="Disconnect WhatsApp">⏏</button>
+                          </>
+                        )}
+                        {campaignState === 'sending' && (
+                          <button className="btn-danger" onClick={handleStopCampaign}>⏹ Stop</button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Manual mode info */}
+                    {sendMode === 'manual' && (
+                      <p className="text-[0.76rem] text-app-text-dim mt-3 leading-[1.5]">
+                        Click <strong className="text-[#25d366]">💬</strong> on each lead to open WhatsApp with the AI message pre-filled — <strong className="text-green">100% safe</strong>.
+                      </p>
+                    )}
+
+                    {/* Auto mode: warning */}
+                    {sendMode === 'auto' && waStatus === 'disconnected' && (
+                      <p className="text-[0.76rem] text-app-text-dim mt-3 leading-[1.5]">
+                        <strong className="text-[#fbbf24]">⚠ Safety:</strong> Uses 45-120s random delays to mimic human behavior. Use Manual mode for new accounts.
+                      </p>
+                    )}
+
+                    {/* Campaign progress */}
+                    {campaignState === 'sending' && (
+                      <div className="mt-3">
+                        <div className="flex items-baseline justify-between gap-2 mb-[0.35rem]">
+                          <span className="text-[0.68rem] font-extrabold uppercase tracking-[0.13em]" style={{ color: '#25d366' }}>
+                            ⚡ Sending
+                          </span>
+                          <span className="text-[0.78rem] font-bold text-app-text tabular-nums">
+                            {sendProgress.current}/{sendProgress.total}
+                            <span className="text-app-text-dim ml-1 text-[0.72rem]">{sendPercent}%</span>
+                          </span>
+                        </div>
+                        <div className="h-[3px] bg-[rgba(51,65,85,0.4)] rounded-full overflow-hidden">
+                          <div className="sender-progress-fill" style={{ width: `${sendPercent}%` }} />
+                        </div>
+                        {waitingDelay !== null && (
+                          <p className="text-[0.72rem] text-app-text-dim italic mt-[0.3rem]">
+                            ⏱ Waiting {waitingDelay}s before next…
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Campaign result */}
+                    {campaignState === 'done' && sendResult && (
+                      <div className="sender-result mt-3">
+                        <span className="text-[1.1rem]">✅</span>
+                        <p className="text-[0.82rem] font-bold text-app-text">
+                          Campaign done — <span style={{ color: '#25d366' }}>{sendResult.sent} sent</span>
+                          {sendResult.failed > 0 && <span className="text-red"> · {sendResult.failed} failed</span>}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Send error */}
+                    {sendError && (
+                      <div className="flex items-center gap-2 mt-3 text-[0.78rem] text-red-light">
+                        <span>⚠</span>
+                        <span className="flex-1">{sendError}</span>
+                        <button className="ai-error-close" onClick={() => setSendError(null)}>✕</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               {/* AI error banner */}
               {aiError && (
                 <div className="flex items-center gap-[0.6rem] mb-[0.9rem] py-[0.7rem] px-4 bg-[rgba(248,113,113,0.08)] border border-[rgba(248,113,113,0.28)] rounded-[10px]">
@@ -642,6 +894,12 @@ function App(): React.ReactElement {
                           <span className={`sort-indicator ${sortBy === 'custom_message' ? sortDir : ''}`} />
                         </button>
                       </th>
+                      <th aria-sort={sortBy === 'send_status' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+                        <button className={`th-btn${sortBy === 'send_status' ? ' active' : ''}`} onClick={() => handleSort('send_status')}>
+                          <span className="uppercase tracking-[0.12em]">Status</span>
+                          <span className={`sort-indicator ${sortBy === 'send_status' ? sortDir : ''}`} />
+                        </button>
+                      </th>
                       <th></th>
                     </tr>
                   </thead>
@@ -649,8 +907,10 @@ function App(): React.ReactElement {
                     {paginatedLeads.map((lead, idx) => {
                       const key = lead.id ?? lead.name
                       const uniqueKey = lead.id ?? (currentPage * pageSize + idx)
+                      const isSending = currentSendLeadId === lead.id && campaignState === 'sending'
+                      const { label: sendLabel, cls: sendCls } = getLeadSendStatus(lead)
                       return (
-                        <tr key={uniqueKey} className={newLeadIds.has(key) ? 'row-new' : ''}>
+                        <tr key={uniqueKey} className={`${newLeadIds.has(key) ? 'row-new' : ''}${isSending ? ' row-sending' : ''}`}>
                           <td className="text-app-text-mute w-12 text-right font-bold text-[0.74rem] tabular-nums" data-label="#">{lead.id ?? '—'}</td>
                           <td className="flex items-center justify-center" data-label="Detail">
                             <button
@@ -694,7 +954,24 @@ function App(): React.ReactElement {
                               </span>
                             ) : <span className="text-app-text-mute">—</span>}
                           </td>
+                          <td data-label="Status">
+                            {lead.phone && lead.custom_message ? (
+                              <span className={`send-badge ${sendCls}`}>
+                                {isSending && <span className="send-badge__pulse" />}
+                                {sendLabel}
+                              </span>
+                            ) : <span className="text-app-text-mute text-[0.72rem]">—</span>}
+                          </td>
                           <td className="flex items-center gap-[0.3rem] whitespace-nowrap" data-label="Actions">
+                            {lead.phone && lead.custom_message && (
+                              <button
+                                className="btn-wa"
+                                onClick={() => handleManualSend(lead)}
+                                title="Send via WhatsApp"
+                              >
+                                💬
+                              </button>
+                            )}
                             {!generatingIds.has(lead.id!) && aiState !== 'running' && (
                               <button
                                 className={`btn-gen-one${lead.custom_message ? ' btn-regen' : ''}`}
@@ -840,8 +1117,47 @@ function App(): React.ReactElement {
                 <div className="flex flex-col gap-[0.3rem] mt-[0.3rem] pt-4 border-t border-[rgba(30,41,59,0.55)]">
                   <span className="text-[0.62rem] font-extrabold text-app-text-dim uppercase tracking-[0.12em]">✨ AI Message</span>
                   <p className="text-[0.88rem] text-purple-light leading-[1.6] bg-[rgba(167,139,250,0.06)] border border-[rgba(167,139,250,0.15)] rounded-[10px] py-3 px-4 m-0 font-medium">{selectedLead.custom_message}</p>
+                  {selectedLead.phone && (
+                    <button
+                      className="btn-wa-modal"
+                      onClick={() => window.api.openWhatsApp(selectedLead.phone, selectedLead.custom_message)}
+                    >
+                      💬 Send via WhatsApp
+                    </button>
+                  )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════ QR CODE MODAL ══════════════ */}
+      {showQrModal && (
+        <div className="modal-overlay" onClick={() => setShowQrModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center' }}>
+            <div className="flex items-center justify-between" style={{ padding: '1.4rem 1.6rem 1.1rem', borderBottom: '1px solid rgba(30,41,59,0.6)' }}>
+              <div className="flex items-center gap-[0.85rem]">
+                <span className="text-2xl">📱</span>
+                <div>
+                  <h2 className="text-[1.05rem] font-extrabold text-app-text tracking-[-0.02em]">Connect WhatsApp</h2>
+                  <span className="block text-[0.67rem] font-bold text-app-text-dim uppercase tracking-[0.1em] mt-[0.15rem]">Scan QR Code</span>
+                </div>
+              </div>
+              <button className="modal-close" onClick={() => setShowQrModal(false)} title="Close">✕</button>
+            </div>
+            <div style={{ padding: '1.6rem' }}>
+              {qrDataUrl && qrDataUrl.startsWith('data:') ? (
+                <img src={qrDataUrl} alt="WhatsApp QR Code" style={{ width: 240, height: 240, borderRadius: 12, margin: '0 auto', display: 'block' }} />
+              ) : (
+                <div className="flex flex-col items-center gap-3" style={{ padding: '2rem 0' }}>
+                  <span className="ai-pending-dots"><span /><span /><span /></span>
+                  <span className="text-[0.78rem] text-app-text-dim">Waiting for QR code…</span>
+                </div>
+              )}
+              <p className="text-[0.76rem] text-app-text-dim mt-4 leading-[1.5]">
+                Open <strong className="text-app-text">WhatsApp</strong> → Settings → Linked Devices → Link a Device
+              </p>
             </div>
           </div>
         </div>
