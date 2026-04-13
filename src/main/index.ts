@@ -21,6 +21,7 @@ import {
   sendBatch,
   abortSending,
   disconnectWhatsApp,
+  logoutWhatsApp,
   getWhatsAppStatus,
   type SendQueueItem
 } from './whatsapp'
@@ -301,6 +302,11 @@ app.whenReady().then(() => {
   // IPC: disconnect whatsapp-web.js client
   ipcMain.handle('wa:disconnect', async () => {
     await disconnectWhatsApp()
+  })
+
+  // IPC: logout & wipe session so a fresh QR scan is required
+  ipcMain.handle('wa:logout', async () => {
+    await logoutWhatsApp()
   })
 
   // IPC: manual send single lead via wa.me (marks as opened_manual)

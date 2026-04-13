@@ -108,6 +108,9 @@ const api = {
   waDisconnect: (): Promise<void> =>
     ipcRenderer.invoke('wa:disconnect'),
 
+  waLogout: (): Promise<void> =>
+    ipcRenderer.invoke('wa:logout'),
+
   waManualSend: (payload: { leadId: number; phone: string; message: string }): Promise<void> =>
     ipcRenderer.invoke('wa:manualSend', payload),
 

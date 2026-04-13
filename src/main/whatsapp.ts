@@ -6,6 +6,7 @@
 import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { app } from 'electron'
+import { rmSync } from 'fs'
 
 // whatsapp-web.js ships as CJS; use require() to avoid ESM issues inside electron-vite
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -222,6 +223,21 @@ export async function disconnectWhatsApp(): Promise<void> {
     client = null
     setStatus('disconnected')
   }
+}
+
+/**
+ * Logout + wipe saved session so next connect shows a fresh QR.
+ */
+export async function logoutWhatsApp(): Promise<void> {
+  if (client) {
+    try { await client.logout() } catch { /* ignore */ }
+    try { await client.destroy() } catch { /* ignore */ }
+    client = null
+  }
+  // Remove persisted LocalAuth session data
+  const dataPath = join(app.getPath('userData'), '.wwebjs_auth')
+  try { rmSync(dataPath, { recursive: true, force: true }) } catch { /* ignore */ }
+  setStatus('disconnected')
 }
 
 export function getWhatsAppStatus(): WaClientStatus {

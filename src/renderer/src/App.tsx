@@ -222,7 +222,7 @@ function App(): React.ReactElement {
 
   const handleTestDB = async (): Promise<void> => {
     const dummy: Omit<Lead, 'id'> = {
-      name: 'Test Business', phone: '+92 332 2489190',
+      name: 'Test Business', phone: '+92 3422 148283',
       address: '123 Main St, New York, NY 10001',
       website: 'https://example.com', email: 'hello@example.com', custom_message: '',
       send_status: 'none'
@@ -402,6 +402,13 @@ function App(): React.ReactElement {
 
   const handleWaDisconnect = async (): Promise<void> => {
     await window.api.waDisconnect()
+    setCampaignState('idle')
+    setWaStatus('disconnected')
+    setQrDataUrl(null)
+  }
+
+  const handleWaLogout = async (): Promise<void> => {
+    await window.api.waLogout()
     setCampaignState('idle')
     setWaStatus('disconnected')
     setQrDataUrl(null)
@@ -741,9 +748,14 @@ function App(): React.ReactElement {
                       {/* Action buttons */}
                       <div className="flex items-center gap-2 ml-auto">
                         {sendMode === 'auto' && waStatus === 'disconnected' && (
-                          <button className="btn-wa-connect" onClick={handleWaConnect} disabled={campaignState === 'connecting'}>
-                            {campaignState === 'connecting' ? '⏳ Connecting…' : '🔌 Connect'}
-                          </button>
+                          <>
+                            <button className="btn-wa-connect" onClick={handleWaConnect} disabled={campaignState === 'connecting'}>
+                              {campaignState === 'connecting' ? '⏳ Connecting…' : '🔌 Connect'}
+                            </button>
+                            <button className="btn-ghost text-[#f87171]" onClick={handleWaLogout} title="Unlink saved account & scan new QR next time">
+                              🔓 Unlink
+                            </button>
+                          </>
                         )}
                         {sendMode === 'auto' && (waStatus === 'ready' || waStatus === 'sending') && campaignState !== 'sending' && (
                           <>
@@ -756,6 +768,9 @@ function App(): React.ReactElement {
                               🚀 Send All ({readyToSendLeads.length})
                             </button>
                             <button className="btn-ghost" onClick={handleWaDisconnect} title="Disconnect WhatsApp">⏏</button>
+                            <button className="btn-ghost text-[#f87171]" onClick={handleWaLogout} title="Unlink account & scan new QR">
+                              🔓 Unlink
+                            </button>
                           </>
                         )}
                         {campaignState === 'sending' && (

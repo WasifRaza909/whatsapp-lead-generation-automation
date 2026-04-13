@@ -63,6 +63,7 @@ declare global {
       waSendBatch: () => Promise<{ sent: number; failed: number }>
       waAbort: () => Promise<void>
       waDisconnect: () => Promise<void>
+      waLogout: () => Promise<void>
       waManualSend: (payload: { leadId: number; phone: string; message: string }) => Promise<void>
       onWaStatus: (cb: (data: { status: string; detail?: string }) => void) => () => void
       onWaQr: (cb: (qr: string) => void) => () => void
