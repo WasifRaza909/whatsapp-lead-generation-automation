@@ -255,19 +255,17 @@ app.whenReady().then(() => {
   )
 
   // IPC: open WhatsApp with a pre-filled message via wa.me deep link
-  // Also marks the lead as 'opened_manual' in the database
+  // Does NOT mark as opened_manual — only the React UI updates session state.
+  // This way if the user closes without sending, the status reverts on page reload.
   ipcMain.handle(
     'whatsapp:open',
     async (_event: IpcMainInvokeEvent, payload: { phone: string; message: string; leadId?: number }) => {
-      const { phone, message, leadId } = payload
+      const { phone, message } = payload
       // Strip everything except digits from the phone number
       const cleaned = phone.replace(/[^\d]/g, '')
       if (!cleaned) throw new Error('Invalid phone number')
       const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`
       await shell.openExternal(url)
-      if (leadId) {
-        updateLeadSendStatus(leadId, 'opened_manual')
-      }
     }
   )
 
@@ -309,16 +307,17 @@ app.whenReady().then(() => {
     await logoutWhatsApp()
   })
 
-  // IPC: manual send single lead via wa.me (marks as opened_manual)
+  // IPC: manual send single lead via wa.me
+  // Does NOT mark as opened_manual in DB — only React updates session state.
+  // This way if the user closes without sending, the status reverts on page reload.
   ipcMain.handle(
     'wa:manualSend',
     async (_event: IpcMainInvokeEvent, payload: { leadId: number; phone: string; message: string }) => {
-      const { leadId, phone, message } = payload
+      const { phone, message } = payload
       const cleaned = phone.replace(/[^\d]/g, '')
       if (!cleaned) throw new Error('Invalid phone number')
       const url = `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`
       await shell.openExternal(url)
-      updateLeadSendStatus(leadId, 'opened_manual')
     }
   )
 

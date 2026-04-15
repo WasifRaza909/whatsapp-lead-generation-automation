@@ -76,9 +76,12 @@ function App(): React.ReactElement {
   const [waitingDelay, setWaitingDelay] = useState<number | null>(null)
   const [sendResult, setSendResult] = useState<{ sent: number; failed: number } | null>(null)
   const [sendError, setSendError] = useState<string | null>(null)
-  const [sessionSendResults, setSessionSendResults] = useState<Map<number, 'sent_auto' | 'opened_manual' | 'failed'>>(new Map())
   const [showQrModal, setShowQrModal] = useState(false)
   const waUnsubRef = useRef<Array<() => void>>([])
+  const senderBtnRef = useRef<HTMLButtonElement>(null)
+  const [senderDropdownPos, setSenderDropdownPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 })
+  const [modeSelectorOpen, setModeSelectorOpen] = useState(false)
+  const [prevWaStatus, setPrevWaStatus] = useState<'disconnected' | 'qr' | 'loading' | 'ready' | 'sending' | 'error' | null>(null)
 
   // Close modal on Escape
   // Signal main process that React has rendered — window is shown only after this,
@@ -118,6 +121,20 @@ function App(): React.ReactElement {
   useEffect(() => {
     window.api.getLeads().then(setLeads).catch(console.error)
   }, [])
+
+  // close sender dropdown when clicking outside
+  useEffect(() => {
+    if (!senderOpen) return
+    const handler = (e: MouseEvent): void => {
+      const target = e.target as Element
+      if (!senderBtnRef.current?.contains(target) && !target.closest?.('.sender-dropdown')) {
+        setSenderOpen(false)
+        setModeSelectorOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [senderOpen])
 
   // refresh leads from DB whenever scraping finishes (catches any missed IPC events)
   useEffect(() => {
@@ -327,17 +344,6 @@ function App(): React.ReactElement {
 
   const sendPercent = sendProgress.total > 0 ? Math.round((sendProgress.current / sendProgress.total) * 100) : 0
 
-  const getLeadSendStatus = (lead: Lead): { label: string; cls: string } => {
-    const ss = lead.id ? sessionSendResults.get(lead.id) : undefined
-    const s = ss || lead.send_status
-    switch (s) {
-      case 'sent_auto': return { label: 'Sent', cls: 'status-sent' }
-      case 'opened_manual': return { label: 'Opened', cls: 'status-opened' }
-      case 'failed': return { label: 'Failed', cls: 'status-failed' }
-      default: return { label: 'Pending', cls: 'status-pending' }
-    }
-  }
-
   const handleWaConnect = async (): Promise<void> => {
     setCampaignState('connecting')
     setSendError(null)
@@ -346,37 +352,53 @@ function App(): React.ReactElement {
     waUnsubRef.current = []
 
     const unsubStatus = window.api.onWaStatus((data) => {
-      setWaStatus(data.status as typeof waStatus)
       setWaDetail(data.detail || '')
+      if (data.status === 'qr') {
+        // remember previous status so UI can revert if user closes QR modal
+        setPrevWaStatus(waStatus)
+        setWaStatus('qr')
+        setShowQrModal(true)
+        setSenderOpen(false)
+        setModeSelectorOpen(false)
+        return
+      }
+      // clear stored prev status for other lifecycle events
+      setPrevWaStatus(null)
+      setWaStatus(data.status as typeof waStatus)
       if (data.status === 'ready') { setCampaignState('ready'); setQrDataUrl(null); setShowQrModal(false) }
       if (data.status === 'error') { setCampaignState('error'); setSendError(data.detail || 'Connection failed') }
-      if (data.status === 'disconnected') { setCampaignState('idle') }
+      if (data.status === 'disconnected') { setCampaignState('idle'); setQrDataUrl(null); setShowQrModal(false) }
     })
 
     const unsubQr = window.api.onWaQr((dataUrl) => {
       setQrDataUrl(dataUrl)
       setShowQrModal(true)
+      setSenderOpen(false)
+      setModeSelectorOpen(false)
       setCampaignState('connecting')
     })
 
     waUnsubRef.current = [unsubStatus, unsubQr]
     try { await window.api.waInit() }
-    catch (err) { setSendError(String(err)); setCampaignState('error') }
+    catch {
+      // Only set error if we haven't already transitioned to idle/disconnected
+      // (the onWaStatus listener handles browser-closed scenarios)
+      setCampaignState((prev) => prev === 'connecting' ? 'idle' : prev)
+      setQrDataUrl(null)
+      setShowQrModal(false)
+    }
   }
 
   const handleStartCampaign = async (): Promise<void> => {
     setCampaignState('sending')
     setSendResult(null)
     setSendError(null)
-    setSessionSendResults(new Map())
     setSendProgress({ current: 0, total: readyToSendLeads.length })
 
     const unsub = window.api.onWaSendProgress((p) => {
       setSendProgress({ current: p.current, total: p.total })
       setCurrentSendLeadId(p.leadId)
       setWaitingDelay(p.status === 'waiting' ? (p.nextDelay ?? null) : null)
-      if (p.status === 'done') setSessionSendResults((prev) => new Map(prev).set(p.leadId, 'sent_auto'))
-      else if (p.status === 'failed') setSessionSendResults((prev) => new Map(prev).set(p.leadId, 'failed'))
     })
     waUnsubRef.current.push(unsub)
 
@@ -388,7 +410,16 @@ function App(): React.ReactElement {
       setCurrentSendLeadId(null)
       const updated = await window.api.getLeads()
       setLeads(updated)
-    } catch (err) { setSendError(String(err)); setCampaignState('error') }
+    } catch {
+      // If disconnected mid-send, the onWaStatus listener already moved to 'idle'.
+      // Only set error if we're still in 'sending' state.
+      setCampaignState((prev) => prev === 'sending' ? 'error' : prev)
+      setSendError((prev) => prev || 'Sending interrupted')
+      setWaitingDelay(null)
+      setCurrentSendLeadId(null)
+      const updated = await window.api.getLeads()
+      setLeads(updated)
+    }
   }
 
   const handleStopCampaign = async (): Promise<void> => {
@@ -405,6 +436,9 @@ function App(): React.ReactElement {
     setCampaignState('idle')
     setWaStatus('disconnected')
     setQrDataUrl(null)
+    setShowQrModal(false)
+    setWaitingDelay(null)
+    setCurrentSendLeadId(null)
   }
 
   const handleWaLogout = async (): Promise<void> => {
@@ -412,16 +446,26 @@ function App(): React.ReactElement {
     setCampaignState('idle')
     setWaStatus('disconnected')
     setQrDataUrl(null)
+    setShowQrModal(false)
+    setWaitingDelay(null)
+    setCurrentSendLeadId(null)
   }
 
   const handleManualSend = async (lead: Lead): Promise<void> => {
     if (!lead.id || !lead.phone || !lead.custom_message) return
     try {
       await window.api.waManualSend({ leadId: lead.id, phone: lead.phone, message: lead.custom_message })
-      setSessionSendResults((prev) => new Map(prev).set(lead.id!, 'opened_manual'))
-      const updated = await window.api.getLeads()
-      setLeads(updated)
     } catch (err) { setSendError(String(err)) }
+  }
+
+  const closeQrModal = (): void => {
+    // Hide the QR modal. If the UI currently shows `qr`, revert to previously
+    // recorded status so the dropdown doesn't keep saying "Scan QR…".
+    setShowQrModal(false)
+    setWaStatus((current) => (current === 'qr' ? (prevWaStatus ?? 'disconnected') : current))
+    // Also revert campaign state so the Connect button shows again instead of "Connecting…"
+    setCampaignState((prev) => (prev === 'connecting' ? 'idle' : prev))
+    setPrevWaStatus(null)
   }
 
   // ── Derived ───────────────────────────────────────────────────────────────
@@ -665,9 +709,12 @@ function App(): React.ReactElement {
           {/* Leads Table */}
           {leads.length > 0 && (
             <section className="" ref={tableRef}>
-              <div className="flex items-center justify-between mb-[1.1rem]">
-                <span className="text-[0.65rem] font-extrabold text-app-text-dim uppercase tracking-[0.14em]">Captured Leads</span>
-                <div className="flex items-center gap-3">
+              {/* ── Table Header: AI controls + Smart Sender dropdown trigger ── */}
+              <div className="mb-[0.9rem] flex items-center justify-between gap-3 flex-wrap">
+                {/* Left: Captured Leads + AI button */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className="text-[0.65rem] font-extrabold text-app-text-dim uppercase tracking-[0.14em]">Captured Leads</span>
+                  <span className="inline-flex items-center justify-center bg-[rgba(34,211,238,0.1)] text-cyan font-extrabold text-[0.78rem] py-[0.18rem] px-[0.65rem] rounded-full border border-[rgba(34,211,238,0.25)] tabular-nums" style={{ boxShadow: '0 0 12px rgba(34,211,238,0.15)' }} key={leads.length}>{leads.length}</span>
                   {aiState !== 'running' ? (
                     <button
                       className={`btn-ai${!hasKey ? ' btn-ai--warn' : ''}`}
@@ -684,23 +731,23 @@ function App(): React.ReactElement {
                     <div className="inline-flex items-center gap-2 bg-[rgba(167,139,250,0.1)] border border-[rgba(167,139,250,0.25)] rounded-lg py-[0.42rem] px-[0.9rem] text-[0.78rem] font-bold text-purple-light tabular-nums">
                       <span className="w-[7px] h-[7px] rounded-full bg-purple animate-breathe-fast" style={{ boxShadow: '0 0 8px #a78bfa' }} />
                       AI {aiProgress.current}/{aiProgress.total}
-                      {aiProgress.total > 0 && (
-                        <span className="ml-[0.2rem] text-[rgba(196,181,253,0.6)] text-[0.72rem]">{aiPercent}%</span>
-                      )}
-                      <button className="btn-ai-stop" onClick={handleStopAI} title="Stop AI processing">
-                        ✕
-                      </button>
+                      {aiProgress.total > 0 && <span className="ml-[0.2rem] text-[rgba(196,181,253,0.6)] text-[0.72rem]">{aiPercent}%</span>}
+                      <button className="btn-ai-stop" onClick={handleStopAI} title="Stop AI processing">✕</button>
                     </div>
                   )}
-                  <span className="inline-flex items-center justify-center bg-[rgba(34,211,238,0.1)] text-cyan font-extrabold text-[0.78rem] py-[0.18rem] px-[0.65rem] rounded-full border border-[rgba(34,211,238,0.25)] tabular-nums" style={{ boxShadow: '0 0 12px rgba(34,211,238,0.15)' }} key={leads.length}>{leads.length}</span>
                 </div>
-              </div>
 
-              {/* ── Sender Panel Toggle + Collapsible ── */}
-              <div className="mb-[0.9rem]">
+                {/* Right: Smart Sender dropdown trigger */}
                 <button
+                  ref={senderBtnRef}
                   className={`btn-sender-toggle${senderOpen ? ' btn-sender-toggle--active' : ''}`}
-                  onClick={() => setSenderOpen((p) => !p)}
+                  onClick={() => {
+                    if (!senderOpen && senderBtnRef.current) {
+                      const rect = senderBtnRef.current.getBoundingClientRect()
+                      setSenderDropdownPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right })
+                    }
+                    setSenderOpen((p) => !p)
+                  }}
                 >
                   <span className={`wa-status-dot wa-status-dot--${waStatus}`} style={{ width: 8, height: 8 }} />
                   📡 Smart Sender
@@ -709,135 +756,127 @@ function App(): React.ReactElement {
                   )}
                   <span className={`sender-toggle-chevron${senderOpen ? ' open' : ''}`}>▾</span>
                 </button>
+              </div>
 
-                {senderOpen && (
-                  <div className="sender-panel">
-                    {/* Row 1: Mode pills + Status + Actions */}
-                    <div className="flex items-center gap-4 flex-wrap">
-                      {/* Mode pills */}
-                      <div className="sender-mode-pills">
-                        <button
-                          className={`sender-pill${sendMode === 'manual' ? ' sender-pill--active-manual' : ''}`}
-                          onClick={() => setSendMode('manual')}
-                        >
-                          🛡 Manual
-                        </button>
-                        <button
-                          className={`sender-pill${sendMode === 'auto' ? ' sender-pill--active-auto' : ''}`}
-                          onClick={() => setSendMode('auto')}
-                        >
-                          🤖 Auto
-                        </button>
-                      </div>
-
-                      {/* Status indicator (auto mode) */}
-                      {sendMode === 'auto' && (
-                        <div className="flex items-center gap-2">
-                          <span className={`wa-status-dot wa-status-dot--${waStatus}`} />
-                          <span className="text-[0.78rem] font-semibold text-app-text-dim">
-                            {waStatus === 'disconnected' && 'Not connected'}
-                            {waStatus === 'qr' && 'Scan QR…'}
-                            {waStatus === 'loading' && (waDetail || 'Loading…')}
-                            {waStatus === 'ready' && 'Connected'}
-                            {waStatus === 'sending' && 'Sending…'}
-                            {waStatus === 'error' && 'Error'}
-                          </span>
+              {/* Smart Sender floating dropdown portal */}
+              {senderOpen && createPortal(
+                <div
+                  className="sender-dropdown sender-panel"
+                  style={{ position: 'fixed', top: senderDropdownPos.top, right: senderDropdownPos.right, zIndex: 9999, minWidth: 340, maxWidth: 440 }}
+                >
+                  {/* Row: Mode dropdown + Status + Actions */}
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Mode dropdown */}
+                    <div className="relative">
+                      <button
+                        className="select-theme flex items-center gap-[0.45rem]"
+                        onClick={() => setModeSelectorOpen((p) => !p)}
+                      >
+                        {sendMode === 'manual' ? '🛡 Manual' : '🤖 Auto'} ▾
+                      </button>
+                      {modeSelectorOpen && (
+                        <div className="dropdown-menu animate-fade-in" style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, minWidth: 130 }}>
+                          <button className={`dropdown-item${sendMode === 'manual' ? ' active' : ''}`} onClick={() => { setSendMode('manual'); setModeSelectorOpen(false) }}>🛡 Manual</button>
+                          <button className={`dropdown-item${sendMode === 'auto' ? ' active' : ''}`} onClick={() => { setSendMode('auto'); setModeSelectorOpen(false) }}>🤖 Auto</button>
                         </div>
                       )}
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 ml-auto">
-                        {sendMode === 'auto' && waStatus === 'disconnected' && (
-                          <>
-                            <button className="btn-wa-connect" onClick={handleWaConnect} disabled={campaignState === 'connecting'}>
-                              {campaignState === 'connecting' ? '⏳ Connecting…' : '🔌 Connect'}
-                            </button>
-                            <button className="btn-ghost text-[#f87171]" onClick={handleWaLogout} title="Unlink saved account & scan new QR next time">
-                              🔓 Unlink
-                            </button>
-                          </>
-                        )}
-                        {sendMode === 'auto' && (waStatus === 'ready' || waStatus === 'sending') && campaignState !== 'sending' && (
-                          <>
-                            <button
-                              className="btn-wa-start"
-                              onClick={handleStartCampaign}
-                              disabled={readyToSendLeads.length === 0}
-                              title={readyToSendLeads.length === 0 ? 'No leads ready' : `Send to ${readyToSendLeads.length} leads`}
-                            >
-                              🚀 Send All ({readyToSendLeads.length})
-                            </button>
-                            <button className="btn-ghost" onClick={handleWaDisconnect} title="Disconnect WhatsApp">⏏</button>
-                            <button className="btn-ghost text-[#f87171]" onClick={handleWaLogout} title="Unlink account & scan new QR">
-                              🔓 Unlink
-                            </button>
-                          </>
-                        )}
-                        {campaignState === 'sending' && (
-                          <button className="btn-danger" onClick={handleStopCampaign}>⏹ Stop</button>
-                        )}
-                      </div>
                     </div>
 
-                    {/* Manual mode info */}
-                    {sendMode === 'manual' && (
-                      <p className="text-[0.76rem] text-app-text-dim mt-3 leading-[1.5]">
-                        Click <strong className="text-[#25d366]">💬</strong> on each lead to open WhatsApp with the AI message pre-filled — <strong className="text-green">100% safe</strong>.
-                      </p>
-                    )}
-
-                    {/* Auto mode: warning */}
-                    {sendMode === 'auto' && waStatus === 'disconnected' && (
-                      <p className="text-[0.76rem] text-app-text-dim mt-3 leading-[1.5]">
-                        <strong className="text-[#fbbf24]">⚠ Safety:</strong> Uses 45-120s random delays to mimic human behavior. Use Manual mode for new accounts.
-                      </p>
-                    )}
-
-                    {/* Campaign progress */}
-                    {campaignState === 'sending' && (
-                      <div className="mt-3">
-                        <div className="flex items-baseline justify-between gap-2 mb-[0.35rem]">
-                          <span className="text-[0.68rem] font-extrabold uppercase tracking-[0.13em]" style={{ color: '#25d366' }}>
-                            ⚡ Sending
-                          </span>
-                          <span className="text-[0.78rem] font-bold text-app-text tabular-nums">
-                            {sendProgress.current}/{sendProgress.total}
-                            <span className="text-app-text-dim ml-1 text-[0.72rem]">{sendPercent}%</span>
-                          </span>
-                        </div>
-                        <div className="h-[3px] bg-[rgba(51,65,85,0.4)] rounded-full overflow-hidden">
-                          <div className="sender-progress-fill" style={{ width: `${sendPercent}%` }} />
-                        </div>
-                        {waitingDelay !== null && (
-                          <p className="text-[0.72rem] text-app-text-dim italic mt-[0.3rem]">
-                            ⏱ Waiting {waitingDelay}s before next…
-                          </p>
-                        )}
+                    {/* Status indicator (auto mode) */}
+                    {sendMode === 'auto' && (
+                      <div className="flex items-center gap-2">
+                        <span className={`wa-status-dot wa-status-dot--${waStatus}`} />
+                        <span className="text-[0.78rem] font-semibold text-app-text-dim">
+                          {waStatus === 'disconnected' && 'Not connected'}
+                          {waStatus === 'qr' && 'Scan QR…'}
+                          {waStatus === 'loading' && (waDetail || 'Loading…')}
+                          {waStatus === 'ready' && 'Connected'}
+                          {waStatus === 'sending' && 'Sending…'}
+                          {waStatus === 'error' && 'Error'}
+                        </span>
                       </div>
                     )}
 
-                    {/* Campaign result */}
-                    {campaignState === 'done' && sendResult && (
-                      <div className="sender-result mt-3">
-                        <span className="text-[1.1rem]">✅</span>
-                        <p className="text-[0.82rem] font-bold text-app-text">
-                          Campaign done — <span style={{ color: '#25d366' }}>{sendResult.sent} sent</span>
-                          {sendResult.failed > 0 && <span className="text-red"> · {sendResult.failed} failed</span>}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Send error */}
-                    {sendError && (
-                      <div className="flex items-center gap-2 mt-3 text-[0.78rem] text-red-light">
-                        <span>⚠</span>
-                        <span className="flex-1">{sendError}</span>
-                        <button className="ai-error-close" onClick={() => setSendError(null)}>✕</button>
-                      </div>
-                    )}
+                    {/* Action buttons */}
+                    <div className="flex items-center gap-2 ml-auto">
+                      {sendMode === 'auto' && waStatus === 'disconnected' && (
+                        <>
+                          <button className="btn-wa-connect" onClick={handleWaConnect} disabled={campaignState === 'connecting'}>
+                            {campaignState === 'connecting' ? '⏳ Connecting…' : '🔌 Connect'}
+                          </button>
+                          <button className="btn-ghost text-[#f87171]" onClick={handleWaLogout} title="Unlink saved account & scan new QR next time">🔓 Unlink</button>
+                        </>
+                      )}
+                      {sendMode === 'auto' && (waStatus === 'ready' || waStatus === 'sending') && campaignState !== 'sending' && (
+                        <>
+                          <button className="btn-wa-start" onClick={handleStartCampaign} disabled={readyToSendLeads.length === 0} title={readyToSendLeads.length === 0 ? 'No leads ready' : `Send to ${readyToSendLeads.length} leads`}>
+                            🚀 Send All ({readyToSendLeads.length})
+                          </button>
+                          <button className="btn-ghost" onClick={handleWaDisconnect} title="Disconnect WhatsApp">⏏</button>
+                          <button className="btn-ghost text-[#f87171]" onClick={handleWaLogout} title="Unlink account & scan new QR">🔓 Unlink</button>
+                        </>
+                      )}
+                      {campaignState === 'sending' && (
+                        <button className="btn-danger" onClick={handleStopCampaign}>⏹ Stop</button>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  {/* Manual mode info */}
+                  {sendMode === 'manual' && (
+                    <p className="text-[0.76rem] text-app-text-dim mt-3 leading-[1.5]">
+                      Click <strong className="text-[#25d366]">💬</strong> on each lead to open WhatsApp with the AI message pre-filled — <strong className="text-green">100% safe</strong>.
+                    </p>
+                  )}
+
+                  {/* Auto mode: warning */}
+                  {sendMode === 'auto' && waStatus === 'disconnected' && (
+                    <p className="text-[0.76rem] text-app-text-dim mt-3 leading-[1.5]">
+                      <strong className="text-[#fbbf24]">⚠ Safety:</strong> Uses 45-120s random delays to mimic human behavior. Use Manual mode for new accounts.
+                    </p>
+                  )}
+
+                  {/* Campaign progress */}
+                  {campaignState === 'sending' && (
+                    <div className="mt-3">
+                      <div className="flex items-baseline justify-between gap-2 mb-[0.35rem]">
+                        <span className="text-[0.68rem] font-extrabold uppercase tracking-[0.13em]" style={{ color: '#25d366' }}>⚡ Sending</span>
+                        <span className="text-[0.78rem] font-bold text-app-text tabular-nums">
+                          {sendProgress.current}/{sendProgress.total}
+                          <span className="text-app-text-dim ml-1 text-[0.72rem]">{sendPercent}%</span>
+                        </span>
+                      </div>
+                      <div className="h-[3px] bg-[rgba(51,65,85,0.4)] rounded-full overflow-hidden">
+                        <div className="sender-progress-fill" style={{ width: `${sendPercent}%` }} />
+                      </div>
+                      {waitingDelay !== null && (
+                        <p className="text-[0.72rem] text-app-text-dim italic mt-[0.3rem]">⏱ Waiting {waitingDelay}s before next…</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Campaign result */}
+                  {campaignState === 'done' && sendResult && (
+                    <div className="sender-result mt-3">
+                      <span className="text-[1.1rem]">✅</span>
+                      <p className="text-[0.82rem] font-bold text-app-text">
+                        Campaign done — <span style={{ color: '#25d366' }}>{sendResult.sent} sent</span>
+                        {sendResult.failed > 0 && <span className="text-red"> · {sendResult.failed} failed</span>}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Send error */}
+                  {sendError && (
+                    <div className="flex items-center gap-2 mt-3 text-[0.78rem] text-red-light">
+                      <span>⚠</span>
+                      <span className="flex-1">{sendError}</span>
+                      <button className="ai-error-close" onClick={() => setSendError(null)}>✕</button>
+                    </div>
+                  )}
+                </div>,
+                document.body
+              )}
 
               {/* AI error banner */}
               {aiError && (
@@ -909,12 +948,6 @@ function App(): React.ReactElement {
                           <span className={`sort-indicator ${sortBy === 'custom_message' ? sortDir : ''}`} />
                         </button>
                       </th>
-                      <th aria-sort={sortBy === 'send_status' ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-                        <button className={`th-btn${sortBy === 'send_status' ? ' active' : ''}`} onClick={() => handleSort('send_status')}>
-                          <span className="uppercase tracking-[0.12em]">Status</span>
-                          <span className={`sort-indicator ${sortBy === 'send_status' ? sortDir : ''}`} />
-                        </button>
-                      </th>
                       <th></th>
                     </tr>
                   </thead>
@@ -923,7 +956,6 @@ function App(): React.ReactElement {
                       const key = lead.id ?? lead.name
                       const uniqueKey = lead.id ?? (currentPage * pageSize + idx)
                       const isSending = currentSendLeadId === lead.id && campaignState === 'sending'
-                      const { label: sendLabel, cls: sendCls } = getLeadSendStatus(lead)
                       return (
                         <tr key={uniqueKey} className={`${newLeadIds.has(key) ? 'row-new' : ''}${isSending ? ' row-sending' : ''}`}>
                           <td className="text-app-text-mute w-12 text-right font-bold text-[0.74rem] tabular-nums" data-label="#">{lead.id ?? '—'}</td>
@@ -969,16 +1001,8 @@ function App(): React.ReactElement {
                               </span>
                             ) : <span className="text-app-text-mute">—</span>}
                           </td>
-                          <td data-label="Status">
-                            {lead.phone && lead.custom_message ? (
-                              <span className={`send-badge ${sendCls}`}>
-                                {isSending && <span className="send-badge__pulse" />}
-                                {sendLabel}
-                              </span>
-                            ) : <span className="text-app-text-mute text-[0.72rem]">—</span>}
-                          </td>
                           <td className="flex items-center gap-[0.3rem] whitespace-nowrap" data-label="Actions">
-                            {lead.phone && lead.custom_message && (
+                            {lead.phone?.trim() && lead.custom_message && (
                               <button
                                 className="btn-wa"
                                 onClick={() => handleManualSend(lead)}
@@ -1149,7 +1173,7 @@ function App(): React.ReactElement {
 
       {/* ═══════════════ QR CODE MODAL ══════════════ */}
       {showQrModal && (
-        <div className="modal-overlay" onClick={() => setShowQrModal(false)}>
+        <div className="modal-overlay" onClick={closeQrModal}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 380, textAlign: 'center' }}>
             <div className="flex items-center justify-between" style={{ padding: '1.4rem 1.6rem 1.1rem', borderBottom: '1px solid rgba(30,41,59,0.6)' }}>
               <div className="flex items-center gap-[0.85rem]">
@@ -1159,7 +1183,7 @@ function App(): React.ReactElement {
                   <span className="block text-[0.67rem] font-bold text-app-text-dim uppercase tracking-[0.1em] mt-[0.15rem]">Scan QR Code</span>
                 </div>
               </div>
-              <button className="modal-close" onClick={() => setShowQrModal(false)} title="Close">✕</button>
+              <button className="modal-close" onClick={closeQrModal} title="Close">✕</button>
             </div>
             <div style={{ padding: '1.6rem' }}>
               {qrDataUrl && qrDataUrl.startsWith('data:') ? (

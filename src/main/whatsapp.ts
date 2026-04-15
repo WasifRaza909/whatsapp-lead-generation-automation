@@ -6,7 +6,7 @@
 import { BrowserWindow } from 'electron'
 import { join } from 'path'
 import { app } from 'electron'
-import { rmSync } from 'fs'
+import { rmSync, existsSync } from 'fs'
 
 // whatsapp-web.js ships as CJS; use require() to avoid ESM issues inside electron-vite
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -19,6 +19,27 @@ export type WaClientStatus = 'disconnected' | 'qr' | 'loading' | 'ready' | 'send
 let client: InstanceType<typeof Client> | null = null
 let currentStatus: WaClientStatus = 'disconnected'
 let abortFlag = false
+
+/** Find the system Chrome/Chromium executable — avoids bundled Chromium issues in Electron */
+function findChrome(): string | undefined {
+  const candidates: string[] = []
+  if (process.platform === 'win32') {
+    const base   = process.env['PROGRAMFILES']      ?? 'C:\\Program Files'
+    const base86 = process.env['PROGRAMFILES(X86)'] ?? 'C:\\Program Files (x86)'
+    const local  = process.env['LOCALAPPDATA']      ?? ''
+    candidates.push(
+      `${base}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${base86}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${local}\\Google\\Chrome\\Application\\chrome.exe`,
+      `${base}\\Chromium\\Application\\chrome.exe`,
+    )
+  } else if (process.platform === 'darwin') {
+    candidates.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+  } else {
+    candidates.push('/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium-browser')
+  }
+  return candidates.find((c) => existsSync(c))
+}
 
 function getWin(): BrowserWindow | null {
   return BrowserWindow.getAllWindows()[0] ?? null
@@ -42,17 +63,24 @@ function setStatus(s: WaClientStatus, extra?: string): void {
  */
 export async function initWhatsApp(): Promise<void> {
   if (client) {
-    // Already initialised — just report current state
-    setStatus(currentStatus)
-    return
+    if (currentStatus === 'ready') {
+      // Already connected — just re-confirm
+      setStatus(currentStatus)
+      return
+    }
+    // Stuck in loading/qr from a previous attempt — destroy and restart
+    try { await client.destroy() } catch { /* ignore */ }
+    client = null
   }
 
   const dataPath = join(app.getPath('userData'), '.wwebjs_auth')
+  const executablePath = findChrome()
 
   client = new Client({
     authStrategy: new LocalAuth({ dataPath }),
     puppeteer: {
       headless: true,
+      ...(executablePath ? { executablePath } : {}),
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
@@ -64,7 +92,10 @@ export async function initWhatsApp(): Promise<void> {
 
   setStatus('loading', 'Starting WhatsApp client…')
 
+  console.log('[WA] Chrome executable:', executablePath ?? 'bundled (none found)')
+
   client.on('qr', async (qr: string) => {
+    console.log('[WA] QR event received')
     setStatus('qr')
     try {
       const dataUrl = await QRCodeLib.toDataURL(qr, {
@@ -100,7 +131,23 @@ export async function initWhatsApp(): Promise<void> {
     client = null
   })
 
-  await client.initialize()
+  try {
+    console.log('[WA] Calling client.initialize()…')
+    await client.initialize()
+    console.log('[WA] client.initialize() resolved')
+  } catch (err) {
+    console.error('[WA] client.initialize() failed:', err)
+    // If the browser was closed by the user (or crashed) during init,
+    // the 'disconnected' event already fired and cleaned up.
+    // Only set error status if we haven't already transitioned to 'disconnected'.
+    if (client) {
+      try { await client.destroy() } catch { /* ignore */ }
+      client = null
+    }
+    if (currentStatus !== 'disconnected') {
+      setStatus('disconnected', 'Browser closed during initialization')
+    }
+  }
 }
 
 /**

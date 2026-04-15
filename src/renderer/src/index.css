@@ -644,19 +644,19 @@ label {
   .select-theme:disabled { @apply opacity-40 cursor-not-allowed; }
 
   .dropdown-menu {
-    @apply fixed w-16 bg-[rgba(9,18,33,0.96)] border border-[rgba(34,211,238,0.18)] rounded-[10px] overflow-hidden z-[200];
-    box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,211,238,0.06);
-    backdrop-filter: blur(20px);
+    @apply fixed bg-[#0b1828] border border-[rgba(34,211,238,0.22)] rounded-[12px] overflow-hidden z-[200];
+    max-width: 440px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.75), 0 0 0 1px rgba(34,211,238,0.08);
   }
   .dropdown-item {
-    @apply block w-full text-center py-2 px-3 border-none bg-transparent text-app-text text-sm font-medium cursor-pointer transition-all duration-150;
+    @apply block w-full text-left py-[0.55rem] px-4 border-none bg-transparent text-app-text text-sm font-medium cursor-pointer transition-all duration-150;
   }
   .dropdown-item:hover:not(.active) { @apply bg-[rgba(34,211,238,0.08)] text-cyan; }
   .dropdown-item.active {
-    @apply bg-[rgba(34,211,238,0.15)] text-cyan font-bold;
-    box-shadow: inset 0 0 0 1px rgba(34,211,238,0.3);
+    @apply bg-[rgba(34,211,238,0.14)] text-cyan font-bold;
+    box-shadow: inset 3px 0 0 #22d3ee;
   }
-  .dropdown-item:not(:last-child) { @apply border-b border-[rgba(30,41,59,0.6)]; }
+  .dropdown-item:not(:last-child) { @apply border-b border-[rgba(34,211,238,0.08)]; }
   
   .animate-fade-in {
     animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
@@ -685,8 +685,11 @@ label {
 
   /* Collapsible sender panel */
   .sender-panel {
-    @apply mt-3 bg-[rgba(0,0,0,0.2)] border border-[rgba(30,41,59,0.5)] rounded-xl;
+    background: #0b1828;
+    border: 1px solid rgba(34,211,238,0.18);
+    @apply rounded-xl;
     padding: 1rem 1.3rem;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(34,211,238,0.04);
     animation: fadeIn 0.2s cubic-bezier(0.16,1,0.3,1) forwards;
   }
 
